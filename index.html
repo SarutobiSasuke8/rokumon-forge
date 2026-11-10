@@ -1,0 +1,1620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#100c09" />
+<meta name="description" content="Rokumon Forge — an idle forge of Japanese and ninja weapons." />
+<title>Rokumon Forge</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%23100c09' width='32' height='32'/%3E%3Cpath fill='%23e4b15a' d='M16 3l2 9h8l-6 5 2 9-6-4-6 4 2-9-6-5h8z'/%3E%3C/svg%3E" />
+<style>
+  :root {
+    --ink: #100c09;
+    --soot: #1c1612;
+    --card: #261c16;
+    --line: #3c2e24;
+    --ash: #c8bfb2;
+    --muted: #a89888;
+    --text: #f0e6d8;
+    --ember: #e25a1c;
+    --ember-deep: #8a2e10;
+    --gold: #e4b15a;
+    --gold-dim: #8c6a32;
+    --serif: "Iowan Old Style", Palatino, "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    --sans: "Avenir Next", "Segoe UI", "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--text); }
+  body {
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.45;
+    color-scheme: dark;
+  }
+  button { font: inherit; color: inherit; background: transparent; border: 0; padding: 0; }
+  button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .app {
+    min-height: 100dvh;
+    max-width: 1120px;
+    margin: 0 auto;
+    padding: env(safe-area-inset-top) 16px env(safe-area-inset-bottom);
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+  }
+  header { display: flex; align-items: center; gap: 12px; padding: 12px 0 8px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .mon { width: 36px; height: 36px; color: var(--gold); flex: 0 0 auto; }
+  .brand h1 {
+    font-family: var(--serif);
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    margin: 0;
+    line-height: 1.1;
+  }
+  .brand p {
+    margin: 2px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  .header-stats { margin-left: auto; display: flex; gap: 8px; align-items: stretch; }
+  .stat {
+    min-height: 44px;
+    padding: 4px 10px;
+    border: 1px solid var(--line);
+    background: var(--soot);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .stat .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .stat b { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .icon-btn {
+    width: 44px; height: 44px;
+    border: 1px solid var(--line);
+    color: var(--ash);
+    display: grid; place-items: center;
+  }
+  .icon-btn svg { width: 20px; height: 20px; }
+  .resources {
+    display: flex; gap: 8px; overflow-x: auto; padding: 4px 0 10px;
+    scrollbar-width: none;
+  }
+  .resources::-webkit-scrollbar { display: none; }
+  .res {
+    flex: 0 0 auto;
+    min-width: 112px;
+    min-height: 52px;
+    padding: 6px 10px;
+    background: var(--card);
+    border: 1px solid var(--line);
+  }
+  .res.rare { border-color: var(--gold-dim); }
+  .res .top { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+  .res .k { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; }
+  .res .v { font-variant-numeric: tabular-nums; font-size: 1.05rem; }
+  .res .r { color: var(--gold); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .ico { width: 14px; height: 14px; fill: currentColor; }
+  .ico .line { fill: none; stroke: currentColor; }
+  .workspace { display: flex; flex-direction: column; gap: 14px; }
+  .hearth {
+    position: relative;
+    width: min(100%, 460px);
+    aspect-ratio: 2.15 / 1;
+    margin: 0 auto 10px;
+    border-radius: 50%;
+    overflow: hidden;
+    background:
+      radial-gradient(ellipse at 50% 78%, rgba(226, 90, 28, 0.55), transparent 46%),
+      radial-gradient(ellipse at 50% 100%, #2a120c 0%, var(--ink) 72%);
+    border: 1px solid var(--line);
+  }
+  .hearth.thump { animation: thump 140ms ease-out; }
+  @keyframes thump {
+    40% { transform: scale(0.985); }
+  }
+  .coals i {
+    position: absolute; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--gold); bottom: 30%;
+    animation: floatember 2.6s ease-in-out infinite;
+  }
+  .coals i:nth-child(1) { left: 34%; }
+  .coals i:nth-child(2) { left: 42%; animation-delay: -0.4s; background: var(--ember); }
+  .coals i:nth-child(3) { left: 50%; animation-delay: -1s; }
+  .coals i:nth-child(4) { left: 58%; animation-delay: -1.6s; background: var(--ember); }
+  .coals i:nth-child(5) { left: 46%; animation-delay: -2s; width: 5px; height: 5px; }
+  .coals i:nth-child(6) { left: 54%; animation-delay: -0.8s; width: 4px; height: 4px; }
+  @keyframes floatember {
+    0%, 100% { opacity: 0.35; transform: translateY(0); }
+    50% { opacity: 1; transform: translateY(-10px); }
+  }
+  .anvil { position: absolute; width: 46%; left: 27%; bottom: 16%; }
+  .hammer {
+    position: absolute; width: 54px; height: 54px; left: 58%; top: 16%;
+    transform-origin: 50% 84%; pointer-events: none;
+  }
+  .hammer.swing { animation: swing 160ms ease-out; }
+  @keyframes swing {
+    0% { transform: rotate(-34deg); }
+    55% { transform: rotate(8deg); }
+    100% { transform: rotate(0deg); }
+  }
+  #sparks { position: absolute; inset: 0; pointer-events: none; }
+  .spark {
+    position: absolute; top: 64%; width: 3px; height: 3px; border-radius: 50%;
+    background: var(--gold); animation: spark 480ms ease-out forwards;
+  }
+  @keyframes spark { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
+  .job { margin-bottom: 8px; }
+  .job-top, .pact-top { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .bar { height: 8px; background: var(--ink); border: 1px solid var(--line); margin-top: 4px; }
+  .bar > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--ember-deep), var(--ember)); }
+  .idle-copy { margin: 0 0 8px; color: var(--muted); font-size: 14px; }
+  .heat-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .heat { flex: 1; height: 8px; background: var(--ink); border: 1px solid var(--line); }
+  .heat > span { display: block; height: 100%; background: var(--gold); width: 0; }
+  .stage-actions { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 8px; }
+  .note { margin: 8px 0; color: var(--muted); font-size: 12px; }
+  .suggest { width: 100%; margin-bottom: 4px; }
+  .panel { display: flex; flex-direction: column; min-width: 0; min-height: 280px; }
+  .tabs { display: flex; gap: 4px; padding: 4px; background: var(--ink); border: 1px solid var(--line); }
+  .tabs button {
+    flex: 1; min-height: 44px; color: var(--muted);
+    letter-spacing: 0.08em; text-transform: uppercase; font-size: 12px;
+  }
+  .tabs button[aria-selected="true"] { color: var(--text); background: var(--card); }
+  .panel-body { padding: 12px 2px 8px; }
+  .detail {
+    display: grid; grid-template-columns: 84px 1fr; gap: 12px;
+    margin-bottom: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+  }
+  .detail .art {
+    height: 84px; color: var(--gold); background: var(--ink);
+    border: 1px solid var(--line); display: grid; place-items: center; padding: 8px;
+  }
+  .detail h2 { font-family: var(--serif); font-size: 1.35rem; margin: 0; font-weight: 600; }
+  .kana { color: var(--gold); font-size: 12px; letter-spacing: 0.08em; }
+  .lore { margin: 4px 0 8px; color: var(--ash); }
+  .costs { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+  .cost { font-size: 12px; padding: 3px 6px; border: 1px solid var(--line); color: var(--muted); }
+  .cost.short { color: var(--ember); border-color: var(--ember-deep); }
+  .row-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .group-label {
+    margin: 14px 0 8px; font-size: 11px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--gold);
+  }
+  .grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; }
+  .w-card, .u-card, .p-card {
+    border: 1px solid var(--line); background: var(--card); padding: 10px 10px 12px; text-align: left;
+  }
+  .w-card.on { border-color: var(--gold-dim); }
+  .w-card .nm, .u-card .nm, .p-card .nm { font-family: var(--serif); font-size: 1.05rem; }
+  .meta { color: var(--muted); font-size: 12px; margin: 2px 0 6px; }
+  .btn {
+    min-height: 44px; padding: 0 12px;
+    border: 1px solid var(--line); background: var(--soot); color: var(--text);
+  }
+  .btn-ember { background: var(--ember); border-color: var(--ember); color: #1a0c08; font-weight: 600; }
+  .btn-gold { color: var(--gold); border-color: var(--gold-dim); }
+  .btn:active:not(:disabled) { transform: translateY(1px); }
+  .check { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ash); }
+  .check input { width: 18px; height: 18px; accent-color: var(--ember); }
+  .gallery {
+    display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 12px;
+    scroll-snap-type: x mandatory;
+  }
+  .g-card {
+    flex: 0 0 76px; scroll-snap-align: start;
+    min-height: 84px; border: 1px solid var(--line); background: var(--soot);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 2px; position: relative; color: var(--ash); padding: 6px 4px;
+  }
+  .g-card.on { border-color: var(--gold); color: var(--gold); }
+  .g-card.locked { opacity: 0.45; }
+  .g-svg { width: 36px; height: 36px; }
+  .g-svg svg, .art svg, .sil { width: 100%; height: 100%; fill: currentColor; }
+  .sil .line { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+  .g-name { font-size: 10px; letter-spacing: 0.04em; text-align: center; line-height: 1.2; }
+  .g-count {
+    position: absolute; top: 3px; right: 4px; font-size: 10px; color: var(--gold);
+    font-variant-numeric: tabular-nums;
+  }
+  .q { width: 6px; height: 6px; border-radius: 50%; display: inline-block; background: var(--muted); }
+  .q-fine { background: var(--ember); }
+  .q-masterwork, .q-legendary { background: var(--gold); }
+  .q-legendary { box-shadow: 0 0 0 2px var(--gold-dim); }
+  .ledger-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .ledger-grid div { border: 1px solid var(--line); padding: 8px 10px; background: var(--card); }
+  .ledger-grid .k { display: block; color: var(--muted); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .req { margin: 4px 0; color: var(--muted); }
+  .req.ok { color: var(--gold); }
+  .journal { list-style: none; padding: 0; margin: 8px 0 0; }
+  .journal li { padding: 6px 0; border-bottom: 1px solid var(--line); color: var(--ash); font-size: 13px; }
+  .journal time { color: var(--muted); margin-right: 6px; }
+  #toast {
+    position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(8px);
+    background: var(--soot); color: var(--text); border: 1px solid var(--gold-dim);
+    padding: 10px 14px; opacity: 0; pointer-events: none;
+    transition: opacity 180ms ease, transform 180ms ease;
+    max-width: min(92vw, 420px); text-align: center; z-index: 30;
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .modal {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(16, 12, 9, 0.76);
+    display: grid; place-items: center; padding: 16px;
+  }
+  .modal.hidden { display: none; }
+  .sheet {
+    width: min(540px, 100%);
+    max-height: min(86dvh, 740px);
+    overflow: auto;
+    background: var(--soot);
+    border: 1px solid var(--gold-dim);
+    border-top: 3px solid var(--gold);
+    padding: 22px 18px 16px;
+    user-select: text;
+  }
+  .sheet h2 { font-family: var(--serif); font-size: 1.7rem; margin: 0 0 8px; font-weight: 600; }
+  .sheet h3 { font-family: var(--serif); font-size: 1.05rem; margin: 14px 0 4px; color: var(--gold); font-weight: 600; }
+  .sheet p { margin: 0 0 8px; color: var(--ash); }
+  .sheet .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .gain { display: flex; justify-content: space-between; gap: 12px; padding: 4px 0; border-bottom: 1px solid var(--line); }
+  @media (min-width: 861px) {
+    .app { height: 100dvh; overflow: hidden; }
+    .workspace { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(300px, 0.92fr) minmax(340px, 1.15fr); gap: 18px; }
+    .stage, .panel { min-height: 0; }
+    .panel { overflow: hidden; }
+    .panel-body { flex: 1; min-height: 0; overflow: auto; }
+    .stage { overflow: auto; }
+  }
+  @media (max-width: 860px) {
+    .hearth { aspect-ratio: 2.6 / 1; margin-bottom: 6px; }
+    .header-stats .stat.hide-sm { display: none; }
+    .gallery { order: 3; padding-top: 0; }
+    .workspace { order: 4; }
+    .tabs { position: sticky; top: 0; z-index: 4; }
+  }
+  @media (max-width: 420px) {
+    .stage-actions { grid-template-columns: 1fr 1fr; }
+    #strike { grid-column: 1 / -1; }
+    .detail { grid-template-columns: 64px 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">
+      <svg class="mon" viewBox="0 0 64 64" aria-hidden="true">
+        <circle cx="32" cy="32" r="7" fill="none" stroke="currentColor" stroke-width="2"/>
+        <circle cx="32" cy="10" r="3.2" fill="currentColor"/>
+        <circle cx="51" cy="21" r="3.2" fill="currentColor"/>
+        <circle cx="51" cy="43" r="3.2" fill="currentColor"/>
+        <circle cx="32" cy="54" r="3.2" fill="currentColor"/>
+        <circle cx="13" cy="43" r="3.2" fill="currentColor"/>
+        <circle cx="13" cy="21" r="3.2" fill="currentColor"/>
+      </svg>
+      <div>
+        <h1>Rokumon Forge</h1>
+        <p>Six crests. One fire.</p>
+      </div>
+    </div>
+    <div class="header-stats">
+      <div class="stat hide-sm"><span class="k">Prestige</span><b id="prestige-label">—</b></div>
+      <div class="stat hide-sm"><span class="k">Mastery</span><b id="mastery-label">0</b></div>
+      <div class="stat"><span class="k">Score</span><b id="score">0</b></div>
+      <button type="button" class="icon-btn" data-act="howto" aria-label="How to play">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 114 2c-.8.6-1.5 1.1-1.5 2.2V14"/><circle cx="12" cy="17" r="0.8" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button type="button" class="icon-btn" id="mute" data-act="mute" aria-pressed="false" aria-label="Mute sound"></button>
+    </div>
+  </header>
+  <div id="resources" class="resources"></div>
+  <div class="workspace">
+    <section class="stage" aria-label="Forge">
+      <div class="hearth" id="hearth">
+        <div class="coals" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <svg class="anvil" viewBox="0 0 120 50" aria-hidden="true">
+          <path fill="#c8bfb2" d="M6 30h74l12-10h22v12H96L86 42H20L8 50H2V36z"/>
+          <path fill="#8a7e72" d="M42 42h26v7H42z"/>
+        </svg>
+        <svg id="hammer" class="hammer" viewBox="0 0 80 80" aria-hidden="true">
+          <rect x="36" y="30" width="6" height="38" fill="#c8bfb2"/>
+          <rect x="20" y="16" width="36" height="16" fill="#e4b15a"/>
+        </svg>
+        <div id="sparks"></div>
+      </div>
+      <div id="jobs"></div>
+      <div class="heat-row"><span>Heat</span><div class="heat"><span id="heatbar"></span></div><span id="heatnum">0</span></div>
+      <div class="stage-actions">
+        <button type="button" class="btn btn-ember" id="strike" data-act="strike">Strike</button>
+        <button type="button" class="btn" id="fold" data-act="fold">Fold</button>
+        <button type="button" class="btn" id="fold-all" data-act="fold-all">Fold all</button>
+      </div>
+      <p id="stage-note" class="note"></p>
+      <button type="button" class="btn btn-gold suggest" id="suggest" data-act="suggest"></button>
+    </section>
+    <section class="panel">
+      <div class="tabs" role="tablist">
+        <button type="button" data-act="tab" data-id="arms" role="tab">Arms</button>
+        <button type="button" data-act="tab" data-id="workshop" role="tab">Workshop</button>
+        <button type="button" data-act="tab" data-id="metals" role="tab">Metals</button>
+        <button type="button" data-act="tab" data-id="ledger" role="tab">Ledger</button>
+      </div>
+      <div id="panel" class="panel-body" role="tabpanel"></div>
+    </section>
+  </div>
+  <div id="gallery" class="gallery" aria-label="Weapon gallery"></div>
+</div>
+<div id="toast" role="status"></div>
+<div id="modal" class="modal hidden"></div>
+<script src="/hub-bridge.js"></script>
+<script id="game">
+(function () {
+  "use strict";
+  if (!window.Hub) {
+    var embedded = window.parent !== window;
+    function send(payload) {
+      if (!embedded) return;
+      try { window.parent.postMessage(payload, window.location.origin); } catch (e) {}
+    }
+    window.Hub = {
+      version: 1,
+      embedded: embedded,
+      ready: function () { send({ type: "hub:ready", version: 1 }); },
+      score: function (score) {
+        if (typeof score !== "number" || !isFinite(score)) return;
+        send({ type: "hub:score", score: score });
+      },
+      gameOver: function (score, durationMs) {
+        if (typeof score !== "number" || !isFinite(score)) return;
+        send({ type: "hub:gameover", score: score, durationMs: durationMs });
+      },
+      progress: function (key, value) { send({ type: "hub:progress", key: key, value: value }); },
+      achievement: function (id) { send({ type: "hub:achievement", id: id }); },
+      event: function (name, data) {
+        if (typeof name !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name)) return;
+        if (!data || typeof data !== "object" || Array.isArray(data)) return;
+        send({ type: "hub:event", version: 1, name: name, data: data });
+      }
+    };
+  }
+
+  var SAVE_KEY = "rokumon-forge-v1";
+  var FOLD = { satetsu: 36, sumi: 22 };
+  var Q_RANK = { crude: 0, serviceable: 1, fine: 2, masterwork: 3, legendary: 4 };
+  var Q_NAME = { crude: "Crude", serviceable: "Serviceable", fine: "Fine", masterwork: "Masterwork", legendary: "Legendary" };
+  var Q_MULT = { crude: 0.7, serviceable: 1, fine: 1.55, masterwork: 2.4, legendary: 4 };
+  var Q_MASTERY = { crude: 0, serviceable: 1, fine: 2, masterwork: 4, legendary: 8 };
+
+  var MATS = [
+    { id: "satetsu", name: "Satetsu", rare: false },
+    { id: "sumi", name: "Sumi", rare: false },
+    { id: "urushi", name: "Urushi", rare: false },
+    { id: "whetstone", name: "Whetstone", rare: false },
+    { id: "tamahagane", name: "Tamahagane", rare: false },
+    { id: "spirit", name: "Spirit iron", rare: true },
+    { id: "silk", name: "Moon silk", rare: true },
+    { id: "scale", name: "Dragon scale", rare: true }
+  ];
+  var MAT_NAME = {};
+  MATS.forEach(function (m) { MAT_NAME[m.id] = m.name; });
+  var MAT_ALIAS = {
+    spirit: "spirit", "spirit-iron": "spirit", reitekkou: "spirit", spiritiron: "spirit",
+    silk: "silk", "moon-silk": "silk", moonsilk: "silk", tsukuyomi: "silk",
+    scale: "scale", "dragon-scale": "scale", dragonscale: "scale"
+  };
+
+  function scaleCost(base, growth, lv) { return Math.floor(base * Math.pow(growth, lv)); }
+
+  var UPGRADES = [
+    { id: "bellows", name: "Bellows", max: 25, blurb: "Draws more iron sand and charcoal through the fire.", effect: "+0.48 sand and +0.28 coal each level.", cost: function (lv) { return { satetsu: scaleCost(18, 1.52, lv) }; } },
+    { id: "lacquer", name: "Lacquer shed", max: 20, blurb: "A shed for urushi, so hilts and scabbards can be finished.", effect: "+0.065 lacquer each level.", cost: function (lv) { return { satetsu: scaleCost(28, 1.55, lv), sumi: scaleCost(12, 1.5, lv) }; } },
+    { id: "wheel", name: "Whetstone wheel", max: 20, blurb: "Grit for the edge, and a quench that leans finer.", effect: "+0.04 grit each level, and a better roll.", cost: function (lv) { return { satetsu: scaleCost(24, 1.54, lv) }; } },
+    { id: "folder", name: "Folding hammers", max: 20, blurb: "Folds satetsu and sumi into tamahagane while you work.", effect: "+0.012 bars each second per level, if sand and coal allow.", cost: function (lv) { return { satetsu: scaleCost(40, 1.56, lv), sumi: scaleCost(20, 1.5, lv) }; } },
+    { id: "apprentices", name: "Apprentices", max: 10, blurb: "They keep the coals honest while you are away.", effect: "Longer, fuller offline work. Levels 4 and 8 open another anvil.", cost: function (lv) { return { satetsu: scaleCost(55, 1.62, lv) }; } },
+    { id: "water", name: "Water wheel", max: 15, blurb: "The wheel drives the hammer. At level 1 it can tend a pinned blade.", effect: "+14% quench speed each level.", cost: function (lv) { return { satetsu: scaleCost(48, 1.55, lv) }; } },
+    { id: "heart", name: "Furnace heart", max: 15, blurb: "Heat lingers, and the quench remembers it.", effect: "Slower cooling and a finer quality roll.", cost: function (lv) { return { satetsu: scaleCost(36, 1.58, lv), whetstone: 4 + lv }; } },
+    { id: "bell", name: "Night bell", max: 12, blurb: "Calls the runners home sooner. Level 5 sends a second.", effect: "Pacts return faster.", cost: function (lv) { var c = { sumi: scaleCost(26, 1.52, lv) }; if (lv >= 4) c.spirit = 1; return c; } }
+  ];
+
+  var WEAPONS = [
+    { id: "tanto", name: "Tanto", kana: "短刀", tier: 1, line: "old", value: 20, time: 7, cost: { satetsu: 22, sumi: 12 }, need: null, prestige: 0, lore: "The companion blade. Close, quick, honest." },
+    { id: "shuriken", name: "Shuriken set", kana: "手裏剣", tier: 1, line: "old", value: 18, time: 6, cost: { satetsu: 18, sumi: 10 }, need: null, prestige: 0, lore: "A clutch of stars. Thrown once, counted forever." },
+    { id: "wakizashi", name: "Wakizashi", kana: "脇差", tier: 2, line: "old", value: 55, time: 12, cost: { satetsu: 70, sumi: 36, whetstone: 10 }, need: { tanto: 1 }, prestige: 0, lore: "The side companion to a longer sword." },
+    { id: "kusarigama", name: "Kusarigama", kana: "鎖鎌", tier: 3, line: "old", value: 120, time: 16, cost: { satetsu: 120, urushi: 16, whetstone: 14 }, need: { shuriken: 1 }, prestige: 0, lore: "Sickle, chain and weight. A ninja's argument." },
+    { id: "katana", name: "Katana", kana: "刀", tier: 4, line: "old", value: 280, time: 22, cost: { tamahagane: 22, urushi: 18, whetstone: 16 }, need: { wakizashi: 1 }, prestige: 0, lore: "The sword the forge is known for. Folded, quenched, named." },
+    { id: "naginata", name: "Naginata", kana: "薙刀", tier: 5, line: "old", value: 520, time: 28, cost: { tamahagane: 36, urushi: 28, whetstone: 18 }, need: { kusarigama: 1, katana: 1 }, prestige: 0, lore: "A glaive with reach enough to keep a courtyard." },
+    { id: "tachi", name: "Tachi", kana: "太刀", tier: 6, line: "old", value: 980, time: 34, cost: { tamahagane: 48, spirit: 6, urushi: 24 }, need: { katana: 1 }, prestige: 0, lore: "Worn edge-down. Spirit iron in the steel." },
+    { id: "yumi", name: "Yumi", kana: "弓", tier: 6, line: "old", value: 920, time: 32, cost: { tamahagane: 40, silk: 8, spirit: 4 }, need: { naginata: 1 }, prestige: 0, lore: "An asymmetric bow. Moon silk on the string." },
+    { id: "odachi", name: "Odachi", kana: "大太刀", tier: 8, line: "old", value: 2400, time: 48, cost: { tamahagane: 80, spirit: 10, scale: 2 }, need: { tachi: 1, yumi: 1 }, prestige: 0, lore: "A field sword too long for a doorway. The old line's crown." },
+    { id: "jian", name: "Jian", kana: "劍", tier: 5, line: "outland", value: 640, time: 24, cost: { tamahagane: 30, spirit: 4 }, need: null, prestige: 1, lore: "A straight sword from another court, folded in this fire." },
+    { id: "shamshir", name: "Shamshir", kana: "", tier: 6, line: "outland", value: 1100, time: 30, cost: { tamahagane: 44, spirit: 8, silk: 4 }, need: { jian: 1 }, prestige: 1, lore: "A deep curve. It asks for silk on the grip." },
+    { id: "rapier", name: "Rapier", kana: "", tier: 7, line: "outland", value: 1400, time: 30, cost: { tamahagane: 50, spirit: 8, urushi: 20 }, need: { jian: 1 }, prestige: 1, lore: "A needle with a guard. Manners, then the point." },
+    { id: "claymore", name: "Claymore", kana: "", tier: 9, line: "outland", value: 4200, time: 55, cost: { tamahagane: 100, spirit: 16, scale: 4 }, need: { shamshir: 1, rapier: 1 }, prestige: 2, lore: "A great sword from a colder island. Scales in the fuller." }
+  ];
+
+  var PACTS = [
+    { id: "pilgrimage", name: "Iron pilgrimage", seconds: 120, gain: { spirit: 1 }, blurb: "A runner returns with spirit iron." },
+    { id: "silk", name: "Moon-silk bargain", seconds: 180, gain: { silk: 1 }, blurb: "A quiet trade for Tsukuyomi cord." },
+    { id: "scale", name: "Scale hunt", seconds: 360, gain: { scale: 1 }, blurb: "Opens after any tier 4 blade. One scale, if the hunter returns.", gate: "tier4" }
+  ];
+
+  var MARKET = [
+    { id: "spirit", stockKey: "spirit", cost: { satetsu: 380 }, gain: { spirit: 1 }, label: "1 spirit iron" },
+    { id: "silk", stockKey: "silk", cost: { urushi: 70 }, gain: { silk: 1 }, label: "1 moon silk" },
+    { id: "scale", stockKey: "scale", cost: { spirit: 4, silk: 2 }, gain: { scale: 1 }, label: "1 dragon scale" }
+  ];
+
+  var SIL = {
+    tanto: '<path d="M34 10c2 12 1 24-1 34 3 1 5 4 4 8h-8c0-4 2-7 5-8-1-10 0-22 0-34z"/>',
+    wakizashi: '<path d="M36 6c3 14 2 28-2 42 3 1 6 4 5 8H31c0-4 2-7 5-8-2-12-1-26 0-42z"/>',
+    katana: '<path d="M38 3c4 16 2 32-4 48 4 1 6 4 5 8H29c0-5 3-8 6-9-3-14-1-30 3-47z"/>',
+    tachi: '<path d="M42 3c-2 14-8 30-16 46 4 2 7 5 6 10H22c1-6 4-9 8-10 8-14 14-30 12-46z"/>',
+    odachi: '<path d="M44 2c-4 16-14 34-20 52 5 1 8 5 7 8H20c1-5 4-8 8-9 8-16 16-34 16-51z"/>',
+    shuriken: '<polygon points="32,2 37,22 58,14 42,32 56,54 32,42 10,58 24,34 4,18 27,24"/>',
+    kusarigama: '<path d="M46 12c8 4 8 14 2 18-4 3-9 3-13 0l-1 7 8 3-3 5-11-5 1-7c-6 2-13-1-15-8 4 1 7 0 9-3 2-5 8-9 14-8z"/><circle class="line" cx="16" cy="46" r="3"/><circle class="line" cx="11" cy="38" r="2.4"/><circle class="line" cx="14" cy="30" r="2"/>',
+    naginata: '<path d="M30 58V24h4v34z"/><path d="M32 4c8 5 10 14 4 22h-8C22 16 25 8 32 4z"/>',
+    yumi: '<path class="line" d="M20 6c20 8 24 20 14 32-8 12-8 16-2 22"/><path class="line" d="M22 8c3 16 2 30 8 48"/>',
+    jian: '<path d="M30 16h4v32h-4z"/><path d="M22 16h20v4H22z"/><circle cx="32" cy="56" r="4"/><path d="M29 4h6l-1 12h-4z"/>',
+    shamshir: '<path d="M16 10c22 2 30 16 24 32-5 14-8 16-5 18h-7c-2-4 1-8 5-18 5-14-2-24-17-28z"/>',
+    rapier: '<path d="M31 2h2v40h-2z"/><path d="M20 40h24v3H20z"/><circle class="line" cx="32" cy="52" r="7"/><path d="M30 46h4v14h-4z"/>',
+    claymore: '<path d="M29 8h6v38h-6z"/><path d="M12 16h40v7H12z"/><path d="M27 46h10v10h-10z"/><path d="M26 3h12l-2 7H28z"/>'
+  };
+
+  var ICONS = {
+    satetsu: '<circle cx="4" cy="12" r="2"/><circle cx="9" cy="7" r="2"/><circle cx="12" cy="13" r="1.5"/>',
+    sumi: '<path d="M8 1.5l5 4.5-2 8H5L3 6z"/>',
+    urushi: '<path d="M8 1.5s5 5.5 5 8.5a5 5 0 11-10 0c0-3 5-8.5 5-8.5z"/>',
+    whetstone: '<rect x="2" y="5" width="12" height="7"/>',
+    tamahagane: '<path d="M1 13l3.2-8h2L9 13H1zm8.2 0L12 7h2l2 6h-6.8z"/>',
+    spirit: '<path d="M8 1l1.6 4.2H14l-3.4 2.6 1.4 4.4L8 10.2 3.9 12.2 5.3 7.8 2 5.2h4.4z"/>',
+    silk: '<path class="line" d="M1 6c3 3 4-3 7 0s4-3 6 1" fill="none" stroke="currentColor" stroke-width="1.4"/>',
+    scale: '<path d="M3 8l5-6 5 6-5 6z"/>'
+  };
+
+  var weaponById = {};
+  WEAPONS.forEach(function (w) { weaponById[w.id] = w; });
+  var upgradeById = {};
+  UPGRADES.forEach(function (u) { upgradeById[u.id] = u; });
+
+  function freshMats() {
+    var o = {};
+    MATS.forEach(function (m) { o[m.id] = 0; });
+    return o;
+  }
+  function freshUpgrades() {
+    return { bellows: 0, lacquer: 0, wheel: 0, folder: 0, apprentices: 0, water: 0, heart: 0, bell: 0 };
+  }
+  function defaultState() {
+    return {
+      v: 1,
+      mats: freshMats(),
+      upgrades: freshUpgrades(),
+      forged: {},
+      best: {},
+      retired: {},
+      rack: [],
+      jobs: [],
+      pacts: [],
+      market: { nextAt: Date.now() + 8 * 60 * 1000, stock: { spirit: 2, silk: 2, scale: 1 } },
+      prestige: 0,
+      mastery: 0,
+      lifetimeValue: 0,
+      highestTier: 0,
+      pinned: "tanto",
+      selected: "tanto",
+      auto: false,
+      tab: "arms",
+      welcomed: false,
+      mute: false,
+      runStart: Date.now(),
+      lastTick: Date.now(),
+      journal: [],
+      stats: { forgedTotal: 0, strikes: 0, pactsDone: 0, retiredTotal: 0 },
+      run: { bestTier: 0, legendRetires: 0 },
+      uid: 1,
+      foldFrac: 0
+    };
+  }
+
+  var state = defaultState();
+  var dirty = true;
+  var muted = false;
+  var activeOffline = false;
+  var activeReport = null;
+  var lastScore = -1;
+  var lastStrike = 0;
+  var audioCtx = null;
+  var toastTimer = 0;
+  var grantTimes = [];
+  var panelScroll = 0;
+
+  function esc(s) {
+    return String(s)
+      .replace(/&/g, "\u0026amp;")
+      .replace(/</g, "\u0026lt;")
+      .replace(/>/g, "\u0026gt;")
+      .replace(/"/g, "\u0026quot;")
+      .replace(/'/g, "&#39;");
+  }
+  function fmt(n) {
+    n = Math.max(0, Number(n) || 0);
+    if (n < 100) {
+      var s = n.toFixed(1);
+      return s.endsWith(".0") ? s.slice(0, -2) : s;
+    }
+    if (n < 10000) return Math.floor(n).toLocaleString("en-GB");
+    if (n < 1e6) return (n / 1000).toFixed(n < 100000 ? 1 : 0) + "k";
+    return (n / 1e6).toFixed(2) + "m";
+  }
+  function fmtInt(n) { return Math.floor(Math.max(0, n || 0)).toLocaleString("en-GB"); }
+  function fmtRate(n) {
+    if (n < 0.005) return "+0/s";
+    if (n < 10) return "+" + n.toFixed(2) + "/s";
+    return "+" + n.toFixed(1) + "/s";
+  }
+  function fmtDur(sec) {
+    sec = Math.max(0, Math.floor(sec));
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    var s = sec % 60;
+    if (h) return h + "h " + m + "m";
+    if (m) return m + "m " + s + "s";
+    return s + "s";
+  }
+  function roman(n) {
+    var map = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+    var out = "";
+    n = Math.max(0, Math.floor(n));
+    if (!n) return "—";
+    map.forEach(function (pair) {
+      while (n >= pair[0]) { out += pair[1]; n -= pair[0]; }
+    });
+    return out;
+  }
+  function have(id) { return state.mats[id] || 0; }
+  function canAfford(cost) {
+    for (var k in cost) if (have(k) + 1e-6 < cost[k]) return false;
+    return true;
+  }
+  function pay(cost) {
+    for (var k in cost) {
+      state.mats[k] -= cost[k];
+      if (state.mats[k] < 0.0001) state.mats[k] = 0;
+    }
+  }
+  function shortfall(cost) {
+    for (var k in cost) {
+      var need = cost[k] - have(k);
+      if (need > 0.05) return Math.ceil(need) + " " + MAT_NAME[k];
+    }
+    return "";
+  }
+  function slots() {
+    var n = 1;
+    if (state.upgrades.apprentices >= 4) n++;
+    if (state.upgrades.apprentices >= 8) n++;
+    return n;
+  }
+  function globalMult() {
+    return 1 + state.prestige * 0.15 + Math.min(1, state.mastery * 0.0025);
+  }
+  function rates() {
+    var u = state.upgrades;
+    var m = globalMult();
+    return {
+      satetsu: (0.9 + u.bellows * 0.48) * m,
+      sumi: (0.55 + u.bellows * 0.28) * m,
+      urushi: (0.03 + u.lacquer * 0.065) * m,
+      whetstone: (0.018 + u.wheel * 0.04) * m,
+      tamahagane: u.folder * 0.012 * m
+    };
+  }
+  function forgeSpeed() {
+    return (1 + state.upgrades.water * 0.14) * (1 + Math.min(100, state.heat) / 140);
+  }
+  function offlineSpeed() { return 1 + state.upgrades.water * 0.14; }
+  function heatDecay() { return Math.max(1.2, 5.5 - state.upgrades.heart * 0.18); }
+  function skillBonus(heat) {
+    return state.upgrades.wheel * 2 + state.upgrades.heart * 2.6 + state.prestige * 3.5 + Math.min(100, heat || 0) * 0.1;
+  }
+  function offlineCapSeconds() { return Math.min(12, 4 + state.upgrades.apprentices * 0.8) * 3600; }
+  function offlineEff() { return Math.min(1, 0.35 + state.upgrades.apprentices * 0.07); }
+  function pactSlots() { return 1 + (state.upgrades.bell >= 5 ? 1 : 0); }
+  function pactDuration(p) { return p.seconds / (1 + state.upgrades.bell * 0.12); }
+  function foldsAvailable() {
+    return Math.floor(Math.min(have("satetsu") / FOLD.satetsu, have("sumi") / FOLD.sumi));
+  }
+  function tier4Forged() {
+    return WEAPONS.some(function (w) { return w.tier >= 4 && (state.forged[w.id] || 0) > 0; });
+  }
+  function pactOpen(p) { return p.gate === "tier4" ? tier4Forged() : true; }
+  function needMet(w) {
+    if ((w.prestige || 0) > state.prestige) return { ok: false, why: "Prestige " + roman(w.prestige) };
+    if (w.need) {
+      for (var id in w.need) {
+        if ((state.forged[id] || 0) < w.need[id]) {
+          var name = weaponById[id] ? weaponById[id].name : id;
+          var n = w.need[id];
+          return { ok: false, why: "Forge " + (n > 1 ? n + " " : "a ") + name };
+        }
+      }
+    }
+    return { ok: true };
+  }
+  function rollQuality(heat) {
+    var roll = Math.random() * 100 + skillBonus(heat);
+    if (roll >= 112) return "legendary";
+    if (roll >= 90) return "masterwork";
+    if (roll >= 68) return "fine";
+    if (roll >= 38) return "serviceable";
+    return "crude";
+  }
+  function masteryGain(item) {
+    if ((Q_RANK[item.quality] || 0) < 1) return 0;
+    var w = weaponById[item.id];
+    if (!w) return 0;
+    return (Q_MASTERY[item.quality] || 0) + Math.floor(w.tier / 2);
+  }
+  function computeScore() {
+    return Math.floor(state.lifetimeValue + state.prestige * 1000 + state.highestTier * 25 + state.mastery * 15);
+  }
+  function canPrestige() {
+    return (state.run.bestTier || 0) >= 6 || (state.run.legendRetires || 0) > 0;
+  }
+  function outlook() {
+    var s = skillBonus(state.heat);
+    if (s >= 36) return "The quench can reach legendary.";
+    if (s >= 22) return "Masterwork is a fair hope.";
+    if (s >= 10) return "Fine work is becoming common.";
+    return "Most blades leave serviceable.";
+  }
+  function nextWeapon() {
+    var pinned = state.pinned && weaponById[state.pinned];
+    if (pinned && needMet(pinned).ok) return pinned;
+    var open = WEAPONS.filter(function (w) { return needMet(w).ok; });
+    var fresh = open.filter(function (w) { return !(state.forged[w.id] > 0); });
+    fresh.sort(function (a, b) { return a.tier - b.tier || a.value - b.value; });
+    var i;
+    for (i = 0; i < fresh.length; i++) if (canAfford(fresh[i].cost)) return fresh[i];
+    if (fresh.length) return fresh[0];
+    var afford = open.filter(function (w) { return canAfford(w.cost); });
+    afford.sort(function (a, b) { return b.tier - a.tier; });
+    if (afford.length) return afford[0];
+    open.sort(function (a, b) { return a.tier - b.tier; });
+    return open[0] || WEAPONS[0];
+  }
+
+  function journal(text) {
+    state.journal.unshift({ t: Date.now(), text: text });
+    if (state.journal.length > 18) state.journal.length = 18;
+  }
+  function toast(text) {
+    var el = document.getElementById("toast");
+    el.textContent = text;
+    el.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("show"); }, 2200);
+  }
+  function hubEvent(name, data) {
+    if (!window.Hub || typeof window.Hub.event !== "function") return;
+    try { window.Hub.event(name, data); } catch (e) {}
+  }
+  function reportScore(force) {
+    if (!window.Hub || typeof window.Hub.score !== "function") return;
+    var s = computeScore();
+    if (!force && s === lastScore) return;
+    lastScore = s;
+    try { window.Hub.score(s); } catch (e) {}
+  }
+  function hubReady() {
+    if (!window.Hub || typeof window.Hub.ready !== "function") return;
+    try { window.Hub.ready(); } catch (e) {}
+    reportScore(true);
+  }
+
+  function ac() {
+    if (muted) return null;
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!audioCtx) audioCtx = new AC();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function tone(freq, t, dur, type, gain) {
+    var ctx = ac();
+    if (!ctx) return;
+    var o = ctx.createOscillator();
+    var g = ctx.createGain();
+    o.type = type || "sine";
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(Math.max(0.0001, gain), t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(ctx.destination);
+    o.start(t); o.stop(t + dur);
+  }
+  function playStrike() {
+    var ctx = ac();
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    var len = Math.floor(ctx.sampleRate * 0.05);
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var data = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+    var src = ctx.createBufferSource();
+    src.buffer = buf;
+    var filter = ctx.createBiquadFilter();
+    filter.type = "bandpass";
+    filter.frequency.value = 380;
+    var g = ctx.createGain();
+    g.gain.value = 0.16;
+    src.connect(filter); filter.connect(g); g.connect(ctx.destination);
+    src.start(t);
+    tone(148, t, 0.07, "triangle", 0.06);
+  }
+  function playForge() {
+    var ctx = ac();
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    [392, 494, 587, 784].forEach(function (f, i) { tone(f, t + i * 0.07, 0.32, "sine", 0.05); });
+  }
+  function playUpgrade() {
+    var ctx = ac();
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    tone(523, t, 0.1, "triangle", 0.045);
+    tone(659, t + 0.08, 0.16, "triangle", 0.04);
+  }
+  function playPrestige() {
+    var ctx = ac();
+    if (!ctx) return;
+    var t = ctx.currentTime;
+    tone(110, t, 0.55, "sine", 0.07);
+    tone(220, t + 0.12, 0.45, "sine", 0.04);
+    tone(440, t + 0.28, 0.5, "triangle", 0.035);
+  }
+  function sparks() {
+    var host = document.getElementById("sparks");
+    if (!host || host.childElementCount > 24) return;
+    for (var i = 0; i < 6; i++) {
+      var s = document.createElement("i");
+      s.className = "spark";
+      s.style.left = (42 + Math.random() * 16) + "%";
+      s.style.setProperty("--dx", (Math.random() * 70 - 35) + "px");
+      s.style.setProperty("--dy", (-20 - Math.random() * 46) + "px");
+      host.appendChild(s);
+      (function (node) { setTimeout(function () { node.remove(); }, 500); })(s);
+    }
+  }
+  function swing() {
+    var h = document.getElementById("hammer");
+    var hearth = document.getElementById("hearth");
+    h.classList.remove("swing");
+    hearth.classList.remove("thump");
+    void h.offsetWidth;
+    h.classList.add("swing");
+    hearth.classList.add("thump");
+  }
+
+  function save() {
+    state.lastTick = Date.now();
+    state.mute = muted;
+    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+  }
+  function load() {
+    try {
+      var raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return;
+      var data = JSON.parse(raw);
+      if (!data || data.v !== 1) return;
+      var base = defaultState();
+      state = Object.assign(base, data);
+      state.mats = Object.assign(freshMats(), data.mats || {});
+      state.upgrades = Object.assign(freshUpgrades(), data.upgrades || {});
+      state.stats = Object.assign(base.stats, data.stats || {});
+      state.run = Object.assign(base.run, data.run || {});
+      state.market = Object.assign(base.market, data.market || {});
+      state.market.stock = Object.assign({ spirit: 2, silk: 2, scale: 1 }, (data.market && data.market.stock) || {});
+      state.jobs = (data.jobs || []).filter(function (j) {
+        return j && weaponById[j.id] && typeof j.progress === "number";
+      });
+      state.pacts = (data.pacts || []).filter(function (p) {
+        return p && PACTS.some(function (d) { return d.id === p.id; });
+      });
+      state.rack = (data.rack || []).filter(function (r) { return r && weaponById[r.id]; });
+      state.journal = Array.isArray(data.journal) ? data.journal.slice(0, 18) : [];
+      state.forged = data.forged || {};
+      state.best = data.best || {};
+      state.retired = data.retired || {};
+      if (!weaponById[state.selected]) state.selected = "tanto";
+      if (state.pinned && !weaponById[state.pinned]) state.pinned = null;
+      if (["arms", "workshop", "metals", "ledger"].indexOf(state.tab) < 0) state.tab = "arms";
+      MATS.forEach(function (m) {
+        if (typeof state.mats[m.id] !== "number" || !isFinite(state.mats[m.id]) || state.mats[m.id] < 0) state.mats[m.id] = 0;
+      });
+      muted = !!state.mute;
+    } catch (e) {
+      state = defaultState();
+    }
+  }
+
+  function produce(dt) {
+    var r = rates();
+    state.mats.satetsu += r.satetsu * dt;
+    state.mats.sumi += r.sumi * dt;
+    state.mats.urushi += r.urushi * dt;
+    state.mats.whetstone += r.whetstone * dt;
+    state.foldFrac += r.tamahagane * dt;
+    var n = Math.floor(state.foldFrac);
+    if (n > 0) {
+      var can = Math.min(n, Math.floor(have("satetsu") / FOLD.satetsu), Math.floor(have("sumi") / FOLD.sumi));
+      if (can > 0) {
+        state.mats.satetsu -= can * FOLD.satetsu;
+        state.mats.sumi -= can * FOLD.sumi;
+        state.mats.tamahagane += can;
+        state.foldFrac -= can;
+        if (activeReport) activeReport.folded += can;
+      } else {
+        state.foldFrac = Math.min(state.foldFrac, 1);
+      }
+    }
+  }
+  function resolveJobs() {
+    var done = state.jobs.filter(function (j) { return j.progress >= j.time - 1e-6; });
+    if (!done.length) return;
+    state.jobs = state.jobs.filter(function (j) { return j.progress < j.time - 1e-6; });
+    done.forEach(completeJob);
+    tryFill();
+    dirty = true;
+  }
+  function advanceJobs(dt) {
+    if (!state.jobs.length) return;
+    var speed = activeOffline ? offlineSpeed() : forgeSpeed();
+    state.jobs.forEach(function (j) { j.progress += dt * speed; });
+    resolveJobs();
+  }
+  function advancePacts(dt) {
+    if (!state.pacts.length) return;
+    state.pacts.forEach(function (p) { p.remaining -= dt; });
+    var done = state.pacts.filter(function (p) { return p.remaining <= 0; });
+    if (!done.length) return;
+    state.pacts = state.pacts.filter(function (p) { return p.remaining > 0; });
+    done.forEach(finishPact);
+    dirty = true;
+  }
+  function step(dt) {
+    if (!activeOffline) state.heat = Math.max(0, state.heat - heatDecay() * dt);
+    produce(dt);
+    advanceJobs(dt);
+    advancePacts(dt);
+  }
+  function simulate(seconds, offline) {
+    var report = { forged: {}, folded: 0 };
+    var prevOff = activeOffline;
+    var prevRep = activeReport;
+    activeOffline = !!offline;
+    activeReport = offline ? report : null;
+    var steps = Math.max(1, Math.ceil(seconds / 0.25));
+    if (steps > 80000) steps = 80000;
+    var dt = seconds / steps;
+    for (var i = 0; i < steps; i++) step(dt);
+    activeOffline = prevOff;
+    activeReport = prevRep;
+    return report;
+  }
+
+  function completeJob(job) {
+    var w = weaponById[job.id];
+    if (!w) return;
+    var quality = rollQuality(activeOffline ? 0 : state.heat);
+    var value = Math.max(1, Math.round(w.value * Q_MULT[quality] * (1 + state.prestige * 0.05)));
+    state.forged[w.id] = (state.forged[w.id] || 0) + 1;
+    if ((Q_RANK[quality] || 0) >= (Q_RANK[state.best[w.id]] != null ? Q_RANK[state.best[w.id]] : -1)) state.best[w.id] = quality;
+    if (w.tier > state.highestTier) state.highestTier = w.tier;
+    if (w.tier > (state.run.bestTier || 0)) state.run.bestTier = w.tier;
+    state.lifetimeValue += value;
+    state.stats.forgedTotal++;
+    state.rack.push({ uid: ++state.uid, id: w.id, quality: quality, value: value, at: Date.now() });
+    while (state.rack.length > 40) state.rack.shift();
+    if (activeReport) activeReport.forged[w.id] = (activeReport.forged[w.id] || 0) + 1;
+    if (!activeOffline) {
+      journal(Q_NAME[quality] + " " + w.name + " quenched (" + fmtInt(value) + ")");
+      toast(w.name + " quenched · " + Q_NAME[quality]);
+      playForge();
+      hubEvent("weapon-forged", { weaponId: w.id, tier: w.tier, quality: quality, value: value });
+      reportScore(false);
+    }
+  }
+  function tryFill() {
+    if (!state.auto || state.upgrades.water < 1 || !state.pinned) return;
+    var w = weaponById[state.pinned];
+    if (!w) return;
+    var guard = 0;
+    while (state.jobs.length < slots() && guard++ < 8) {
+      if (!needMet(w).ok || !canAfford(w.cost)) break;
+      var before = state.jobs.length;
+      startForge(w.id);
+      if (state.jobs.length === before) break;
+    }
+  }
+  function startForge(id) {
+    var w = weaponById[id];
+    if (!w) return;
+    var gate = needMet(w);
+    if (!gate.ok) { if (!activeOffline) toast(gate.why); return; }
+    if (state.jobs.length >= slots()) { if (!activeOffline) toast("The anvil is occupied"); return; }
+    if (!canAfford(w.cost)) { if (!activeOffline) toast("Short on materials"); return; }
+    pay(w.cost);
+    state.jobs.push({ id: w.id, progress: 0, time: w.time, uid: ++state.uid });
+    if (!activeOffline) {
+      playUpgrade();
+      dirty = true;
+      save();
+    }
+  }
+  function finishPact(p) {
+    var def = null;
+    PACTS.forEach(function (d) { if (d.id === p.id) def = d; });
+    if (!def) return;
+    var mat = Object.keys(def.gain)[0];
+    var amount = def.gain[mat];
+    state.mats[mat] += amount;
+    state.stats.pactsDone++;
+    if (!activeOffline) {
+      journal(def.name + " returned with " + MAT_NAME[mat]);
+      toast(MAT_NAME[mat] + " arrived");
+      playForge();
+      hubEvent("contract-fulfilled", { contractId: p.id, material: mat, amount: amount });
+    }
+  }
+  function startPact(id) {
+    var def = null;
+    PACTS.forEach(function (d) { if (d.id === id) def = d; });
+    if (!def || !pactOpen(def)) return;
+    if (state.pacts.some(function (p) { return p.id === id; })) { toast("Already on the road"); return; }
+    if (state.pacts.length >= pactSlots()) { toast("Every runner is already out"); return; }
+    var dur = pactDuration(def);
+    state.pacts.push({ id: id, remaining: dur, total: dur });
+    playUpgrade();
+    dirty = true;
+    save();
+  }
+  function fold(n) {
+    var can = Math.min(n, foldsAvailable());
+    if (can <= 0) { toast("Need 36 satetsu and 22 sumi"); return; }
+    state.mats.satetsu -= can * FOLD.satetsu;
+    state.mats.sumi -= can * FOLD.sumi;
+    state.mats.tamahagane += can;
+    if (can >= 5) journal("Folded " + can + " tamahagane");
+    playUpgrade();
+    dirty = true;
+  }
+  function strike() {
+    var now = performance.now();
+    if (now - lastStrike < 150) return;
+    lastStrike = now;
+    ac();
+    state.stats.strikes++;
+    state.heat = Math.min(100, state.heat + 13);
+    if (state.jobs.length) {
+      var job = state.jobs.slice().sort(function (a, b) { return (b.progress / b.time) - (a.progress / a.time); })[0];
+      job.progress += 0.55 * forgeSpeed();
+      resolveJobs();
+    } else if (state.mats.satetsu < 400) {
+      var damp = state.mats.satetsu > 180 ? 0.35 : 1;
+      state.mats.satetsu += 1.05 * damp;
+      state.mats.sumi += 0.6 * damp;
+    }
+    swing();
+    sparks();
+    playStrike();
+  }
+  function buy(id) {
+    var u = upgradeById[id];
+    if (!u) return;
+    var lv = state.upgrades[id] || 0;
+    if (lv >= u.max) return;
+    var cost = u.cost(lv);
+    if (!canAfford(cost)) { toast("Short on materials"); return; }
+    pay(cost);
+    state.upgrades[id] = lv + 1;
+    if (id === "water" && state.upgrades.water === 1) toast("The water wheel can tend a pinned blade");
+    journal(u.name + " " + state.upgrades[id]);
+    playUpgrade();
+    hubEvent("forge-upgraded", { upgradeId: id, level: state.upgrades[id] });
+    dirty = true;
+    save();
+  }
+  function buyMarket(id) {
+    var offer = null;
+    MARKET.forEach(function (m) { if (m.id === id) offer = m; });
+    if (!offer) return;
+    if ((state.market.stock[offer.stockKey] || 0) <= 0) { toast("Sold for this watch"); return; }
+    if (!canAfford(offer.cost)) { toast("Short on materials"); return; }
+    pay(offer.cost);
+    for (var k in offer.gain) state.mats[k] += offer.gain[k];
+    state.market.stock[offer.stockKey]--;
+    journal("Night market: " + offer.label);
+    playUpgrade();
+    dirty = true;
+    save();
+  }
+  function retireUid(uid, silent) {
+    var index = -1;
+    for (var i = 0; i < state.rack.length; i++) if (state.rack[i].uid === uid) index = i;
+    if (index < 0) return 0;
+    var item = state.rack[index];
+    var w = weaponById[item.id];
+    var gain = masteryGain(item);
+    state.rack.splice(index, 1);
+    if (gain > 0) {
+      state.mastery += gain;
+      state.retired[item.id] = (state.retired[item.id] || 0) + 1;
+      state.stats.retiredTotal++;
+      if (item.quality === "legendary" && w && w.tier >= 5) state.run.legendRetires = (state.run.legendRetires || 0) + 1;
+      if (!silent) {
+        journal("Retired " + Q_NAME[item.quality] + " " + w.name + " (+" + gain + " mastery)");
+        toast("Mastery +" + gain);
+        playUpgrade();
+        hubEvent("weapon-retired", { weaponId: item.id, tier: w.tier, mastery: state.mastery });
+        reportScore(false);
+      }
+    } else if (!silent) {
+      toast("Crude " + (w ? w.name : "blade") + " set aside");
+    }
+    if (!silent) { dirty = true; save(); }
+    return gain;
+  }
+  function retireAll(silent) {
+    var ids = state.rack.map(function (r) { return r.uid; });
+    var total = 0;
+    ids.forEach(function (uid) { total += retireUid(uid, true); });
+    if (!silent) {
+      if (total > 0) {
+        journal("Rack retired for " + total + " mastery");
+        toast("Mastery +" + total);
+        playUpgrade();
+        reportScore(false);
+      } else toast("Nothing on the rack worth retiring");
+      dirty = true;
+      save();
+    }
+    return total;
+  }
+  function doPrestige() {
+    if (!canPrestige()) { toast("This firing has not earned a rekindle"); return; }
+    var score = computeScore();
+    var dur = Math.max(0, Date.now() - (state.runStart || Date.now()));
+    if (window.Hub && typeof window.Hub.gameOver === "function") {
+      try { window.Hub.gameOver(score, dur); } catch (e) {}
+    }
+    retireAll(true);
+    var keepSpirit = state.mats.spirit;
+    var keepSilk = state.mats.silk;
+    var keepScale = state.mats.scale;
+    state.mats = freshMats();
+    state.mats.spirit = keepSpirit;
+    state.mats.silk = keepSilk;
+    state.mats.scale = keepScale;
+    state.upgrades = freshUpgrades();
+    state.jobs = [];
+    state.pacts = [];
+    state.rack = [];
+    state.auto = false;
+    state.heat = 0;
+    state.foldFrac = 0;
+    state.prestige += 1;
+    state.run = { bestTier: 0, legendRetires: 0 };
+    state.runStart = Date.now();
+    journal("The forge was rekindled. Prestige " + roman(state.prestige));
+    toast("Prestige " + roman(state.prestige) + ". The coals are banked.");
+    playPrestige();
+    hubEvent("prestige", { level: state.prestige, score: computeScore() });
+    reportScore(true);
+    dirty = true;
+    save();
+    closeModal();
+  }
+  function refreshMarket() {
+    var interval = 8 * 60 * 1000;
+    if (!state.market.nextAt || !isFinite(state.market.nextAt)) state.market.nextAt = Date.now() + interval;
+    if (Date.now() < state.market.nextAt) return;
+    state.market.stock = { spirit: 2, silk: 2, scale: 1 };
+    var guard = 0;
+    while (state.market.nextAt <= Date.now() && guard++ < 1000) state.market.nextAt += interval;
+    journal("The night market restocked");
+    dirty = true;
+  }
+  function runOffline(gap) {
+    var cap = offlineCapSeconds();
+    var counted = Math.min(gap, cap);
+    var before = Object.assign({}, state.mats);
+    var report = simulate(counted * offlineEff(), true);
+    report.away = gap;
+    report.counted = counted;
+    report.eff = offlineEff();
+    report.capped = gap > cap + 5;
+    report.gained = {};
+    MATS.forEach(function (m) {
+      var d = state.mats[m.id] - (before[m.id] || 0);
+      if (d > 0.5) report.gained[m.id] = d;
+    });
+    var blades = 0;
+    Object.keys(report.forged).forEach(function (id) { blades += report.forged[id]; });
+    if (blades || Object.keys(report.gained).length) {
+      var bits = [];
+      if (blades) bits.push(blades + " blade" + (blades === 1 ? "" : "s"));
+      journal("While you were away: " + (bits.join(", ") || "the coals held"));
+      hubEvent("offline-return", { seconds: Math.floor(counted), forged: blades });
+      reportScore(false);
+    }
+    return report;
+  }
+  function grantMaterial(material, amount, source) {
+    var key = String(material || "").toLowerCase().trim();
+    var id = MAT_ALIAS[key];
+    if (!id) return { ok: false, error: "unknown material" };
+    var n = Math.floor(Number(amount));
+    if (!isFinite(n) || n <= 0) return { ok: false, error: "bad amount" };
+    n = Math.min(25, n);
+    var now = Date.now();
+    grantTimes = grantTimes.filter(function (t) { return now - t < 60000; });
+    if (grantTimes.length >= 12) return { ok: false, error: "rate limited" };
+    grantTimes.push(now);
+    var src = String(source || "courier").replace(/[^\w .\-:]/g, "").slice(0, 80) || "courier";
+    state.mats[id] += n;
+    journal("Courier (" + src + "): " + n + " " + MAT_NAME[id]);
+    toast(MAT_NAME[id] + " +" + n);
+    hubEvent("material-granted", { material: id, amount: n, source: src });
+    dirty = true;
+    save();
+    return { ok: true, material: id, amount: n, source: src };
+  }
+
+  function icon(id) {
+    return '<svg viewBox="0 0 16 16" class="ico" aria-hidden="true">' + (ICONS[id] || "") + "</svg>";
+  }
+  function sil(id) {
+    return '<svg viewBox="0 0 64 64" class="sil" aria-hidden="true">' + (SIL[id] || "") + "</svg>";
+  }
+  function costHtml(cost) {
+    return Object.keys(cost).map(function (k) {
+      var ok = have(k) + 1e-6 >= cost[k];
+      return '<span class="cost ' + (ok ? "ok" : "short") + '" data-cost-mat="' + k + '" data-cost-need="' + cost[k] + '">' + esc(MAT_NAME[k]) + " " + fmtInt(cost[k]) + "</span>";
+    }).join("");
+  }
+  function renderResources() {
+    document.getElementById("resources").innerHTML = MATS.map(function (m) {
+      return '<div class="res' + (m.rare ? " rare" : "") + '"><div class="top">' + icon(m.id) + '<span class="k">' + esc(m.name) + '</span></div><div class="v" data-amt="' + m.id + '">0</div><div class="r" data-rate="' + m.id + '"></div></div>';
+    }).join("");
+  }
+  function renderJobs() {
+    var el = document.getElementById("jobs");
+    if (!state.jobs.length) {
+      el.innerHTML = '<p class="idle-copy">The anvil is clear. Choose a blade, or strike to wake the coals.</p>';
+      return;
+    }
+    el.innerHTML = state.jobs.map(function (job) {
+      var w = weaponById[job.id];
+      var pct = Math.max(0, Math.min(100, (job.progress / job.time) * 100));
+      return '<div class="job"><div class="job-top"><span>' + esc(w.name) + '</span><span data-left="' + job.uid + '"></span></div><div class="bar"><span data-prog="' + job.uid + '" style="width:' + pct.toFixed(1) + '%"></span></div></div>';
+    }).join("");
+  }
+  function renderGallery() {
+    document.getElementById("gallery").innerHTML = WEAPONS.map(function (w) {
+      var gate = needMet(w);
+      var count = state.forged[w.id] || 0;
+      var best = state.best[w.id];
+      return '<button type="button" class="g-card' + (gate.ok ? "" : " locked") + (state.selected === w.id ? " on" : "") + '" data-act="select" data-id="' + w.id + '" title="' + esc(w.name) + '"><span class="g-svg">' + sil(w.id) + '</span><span class="g-name">' + esc(w.name) + "</span>" + (count ? '<span class="g-count">' + count + "</span>" : "") + (best ? '<i class="q q-' + best + '"></i>' : "") + "</button>";
+    }).join("");
+  }
+  function renderArms() {
+    var w = weaponById[state.selected] || WEAPONS[0];
+    var gate = needMet(w);
+    var best = state.best[w.id];
+    var pinned = state.pinned === w.id;
+    var html = '<label class="check"><input type="checkbox" data-act="auto"' + (state.auto ? " checked" : "") + (state.upgrades.water < 1 ? " disabled" : "") + "> Tend the pinned blade</label>";
+    html += '<p class="meta">' + (state.upgrades.water < 1 ? "Build the water wheel to let the forge continue a pinned blade." : "Pins stay on one pattern. The wheel forges it whenever an anvil is free.") + "</p>";
+    html += '<article class="detail"><div class="art">' + sil(w.id) + '</div><div><h2>' + esc(w.name) + "</h2>";
+    html += '<div class="kana">Tier ' + w.tier + (w.kana ? " · " + esc(w.kana) : "") + " · " + (w.line === "old" ? "Old steel" : "Outland") + "</div>";
+    html += '<p class="lore">' + esc(w.lore) + "</p>";
+    html += '<div class="meta">Forged ' + fmtInt(state.forged[w.id] || 0) + (best ? " · best " + Q_NAME[best] : "") + (pinned ? " · pinned" : "") + "</div>";
+    html += '<div class="costs">' + costHtml(w.cost) + "</div>";
+    html += '<p class="meta">' + outlook() + "</p>";
+    html += '<div class="row-actions">';
+    if (!gate.ok) html += '<button type="button" class="btn" disabled>' + esc(gate.why) + "</button>";
+    else if (state.jobs.length >= slots()) html += '<button type="button" class="btn" disabled>Anvil occupied</button>';
+    else html += '<button type="button" class="btn btn-ember" data-act="forge" data-id="' + w.id + '"' + (canAfford(w.cost) ? "" : " disabled") + ">Forge</button>";
+    html += '<button type="button" class="btn btn-gold" data-act="pin" data-id="' + w.id + '">' + (pinned ? "Pinned" : "Pin") + "</button>";
+    html += "</div></div></article>";
+    ["old", "outland"].forEach(function (line) {
+      html += '<div class="group-label">' + (line === "old" ? "Old steel" : "Outland armoury") + "</div><div class=\"grid-cards\">";
+      WEAPONS.filter(function (item) { return item.line === line; }).forEach(function (item) {
+        var g = needMet(item);
+        html += '<button type="button" class="w-card' + (state.selected === item.id ? " on" : "") + '" data-act="select" data-id="' + item.id + '">';
+        html += '<div class="nm">' + esc(item.name) + "</div>";
+        html += '<div class="meta">Tier ' + item.tier + " · " + (state.forged[item.id] || 0) + " forged" + (g.ok ? "" : " · " + esc(g.why)) + "</div>";
+        html += "</button>";
+      });
+      html += "</div>";
+    });
+    return html;
+  }
+  function renderWorkshop() {
+    return '<div class="grid-cards">' + UPGRADES.map(function (u) {
+      var lv = state.upgrades[u.id] || 0;
+      var maxed = lv >= u.max;
+      var cost = maxed ? null : u.cost(lv);
+      return '<article class="u-card"><div class="nm">' + esc(u.name) + "</div><div class=\"meta\">Level " + lv + " / " + u.max + "</div><p class=\"lore\">" + esc(u.blurb) + "</p><p class=\"meta\">" + esc(u.effect) + "</p>" + (cost ? '<div class="costs">' + costHtml(cost) + "</div>" : "") + '<button type="button" class="btn btn-ember" data-act="buy" data-id="' + u.id + '"' + (maxed || !canAfford(cost) ? " disabled" : "") + ">" + (maxed ? "Maxed" : "Improve") + "</button></article>";
+    }).join("") + "</div>";
+  }
+  function renderMetals() {
+    var html = "<p class=\"lore\">Spirit iron, moon silk and dragon scale are catalogue metals. On the Rokumon hub they arrive from other games. Until that courier is connected, pacts and the night market stand in. Grants are kept when you rekindle.</p>";
+    html += '<div class="grid-cards">';
+    PACTS.forEach(function (p) {
+      var open = pactOpen(p);
+      var running = state.pacts.filter(function (x) { return x.id === p.id; })[0];
+      var mat = Object.keys(p.gain)[0];
+      html += '<article class="p-card"><div class="nm">' + esc(p.name) + "</div><p class=\"lore\">" + esc(p.blurb) + "</p><div class=\"meta\">" + esc(MAT_NAME[mat]) + " · " + fmtDur(pactDuration(p)) + "</div>";
+      if (running) {
+        html += '<div class="bar"><span data-pact="' + p.id + '"></span></div><div class="meta" data-pact-left="' + p.id + '"></div>';
+      } else if (!open) {
+        html += '<button type="button" class="btn" disabled>Forge a tier 4 blade first</button>';
+      } else {
+        html += '<button type="button" class="btn btn-ember" data-act="pact" data-id="' + p.id + '"' + (state.pacts.length >= pactSlots() ? " disabled" : "") + ">Send a runner</button>";
+      }
+      html += "</article>";
+    });
+    html += "</div>";
+    html += '<div class="group-label">Night market</div><p class="meta" id="market-eta"></p><div class="grid-cards">';
+    MARKET.forEach(function (offer) {
+      var stock = state.market.stock[offer.stockKey] || 0;
+      html += '<article class="p-card"><div class="nm">' + esc(offer.label) + '</div><div class="meta">Stock ' + stock + "</div><div class=\"costs\">" + costHtml(offer.cost) + '</div><button type="button" class="btn btn-gold" data-act="market" data-id="' + offer.id + '"' + (stock <= 0 || !canAfford(offer.cost) ? " disabled" : "") + ">Trade</button></article>";
+    });
+    html += "</div>";
+    html += "<p class=\"meta\">Runners: " + state.pacts.length + " / " + pactSlots() + ". The night bell's fifth ring opens the second.</p>";
+    return html;
+  }
+  function renderLedger() {
+    var req = canPrestige();
+    var html = '<div class="ledger-grid">';
+    html += stat("Lifetime value", fmtInt(state.lifetimeValue));
+    html += stat("Blades quenched", fmtInt(state.stats.forgedTotal));
+    html += stat("Best tier ever", state.highestTier ? String(state.highestTier) : "—");
+    html += stat("This firing", "Tier " + (state.run.bestTier || 0));
+    html += stat("Mastery", fmtInt(state.mastery) + " · +" + Math.round(Math.min(1, state.mastery * 0.0025) * 100) + "%");
+    html += stat("Prestige", roman(state.prestige) + " · +" + Math.round(state.prestige * 15) + "%");
+    html += "</div>";
+    html += "<h3 class=\"group-label\">Rack</h3>";
+    if (!state.rack.length) html += '<p class="meta">Nothing waiting. Retired blades leave the rack and stay in the codex.</p>';
+    else {
+      html += '<div class="grid-cards">';
+      state.rack.slice().reverse().slice(0, 8).forEach(function (item) {
+        var w = weaponById[item.id];
+        var gain = masteryGain(item);
+        html += '<article class="p-card"><div class="nm">' + esc(w.name) + "</div><div class=\"meta\">" + Q_NAME[item.quality] + " · " + fmtInt(item.value) + "</div>";
+        html += '<button type="button" class="btn" data-act="retire" data-uid="' + item.uid + '">' + (gain ? "Retire +" + gain : "Set aside") + "</button></article>";
+      });
+      html += "</div>";
+      if (state.rack.length > 8) html += '<p class="meta">' + (state.rack.length - 8) + " more on the rack.</p>";
+      html += '<div class="row-actions" style="margin-top:8px"><button type="button" class="btn btn-gold" data-act="retire-all">Retire the whole rack</button></div>';
+    }
+    html += "<h3 class=\"group-label\">Rekindle</h3>";
+    html += '<p class="lore">Bank the coals and begin again. Workshop levels, common stock, tamahagane and the rack are cleared. Mastery is taken from the rack first. Catalogue metals, the codex and your score remain. Output rises by 15%.</p>';
+    html += '<p class="req' + ((state.run.bestTier || 0) >= 6 ? " ok" : "") + '">Quench a tier 6 weapon this firing (tachi, yumi, and onward).</p>';
+    html += '<p class="req' + ((state.run.legendRetires || 0) > 0 ? " ok" : "") + '">Or retire a legendary blade of tier 5 or higher this firing.</p>';
+    if (state.prestige === 0) html += '<p class="meta">The first rekindle opens the outland armoury.</p>';
+    else if (state.prestige === 1) html += '<p class="meta">The next rekindle reveals the claymore.</p>';
+    html += '<button type="button" class="btn btn-ember" data-act="prestige-open"' + (req ? "" : " disabled") + ">Rekindle the forge</button>";
+    html += "<h3 class=\"group-label\">Journal</h3><ul class=\"journal\">";
+    if (!state.journal.length) html += "<li>The ledger is blank.</li>";
+    state.journal.forEach(function (entry) {
+      var d = new Date(entry.t);
+      var clock = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      html += "<li><time>" + esc(clock) + "</time>" + esc(entry.text) + "</li>";
+    });
+    html += "</ul>";
+    return html;
+  }
+  function stat(k, v) { return "<div><span class=\"k\">" + esc(k) + "</span><b>" + esc(v) + "</b></div>"; }
+  function renderPanel() {
+    var el = document.getElementById("panel");
+    panelScroll = el.scrollTop;
+    var tabs = document.querySelectorAll(".tabs button");
+    tabs.forEach(function (btn) {
+      var on = btn.getAttribute("data-id") === state.tab;
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    });
+    var html = "";
+    if (state.tab === "workshop") html = renderWorkshop();
+    else if (state.tab === "metals") html = renderMetals();
+    else if (state.tab === "ledger") html = renderLedger();
+    else html = renderArms();
+    el.innerHTML = html;
+    el.scrollTop = panelScroll;
+  }
+  function renderDynamic() {
+    renderJobs();
+    renderPanel();
+    renderGallery();
+  }
+  function paint() {
+    var scoreEl = document.getElementById("score");
+    if (scoreEl) scoreEl.textContent = fmtInt(computeScore());
+    var pEl = document.getElementById("prestige-label");
+    if (pEl) pEl.textContent = state.prestige ? roman(state.prestige) : "—";
+    var mEl = document.getElementById("mastery-label");
+    if (mEl) mEl.textContent = fmtInt(state.mastery);
+    var r = rates();
+    MATS.forEach(function (m) {
+      var amt = document.querySelector('[data-amt="' + m.id + '"]');
+      if (amt) amt.textContent = fmt(state.mats[m.id]);
+      var rate = document.querySelector('[data-rate="' + m.id + '"]');
+      if (!rate) return;
+      if (m.id === "tamahagane") rate.textContent = state.upgrades.folder ? fmtRate(r.tamahagane) : "folded";
+      else if (m.rare) rate.textContent = "courier";
+      else rate.textContent = fmtRate(r[m.id] || 0);
+    });
+    var heat = Math.max(0, Math.min(100, state.heat));
+    document.getElementById("heatbar").style.width = heat + "%";
+    document.getElementById("heatnum").textContent = String(Math.round(heat));
+    state.jobs.forEach(function (job) {
+      var bar = document.querySelector('[data-prog="' + job.uid + '"]');
+      var speed = Math.max(0.25, forgeSpeed());
+      if (bar) bar.style.width = Math.max(0, Math.min(100, (job.progress / job.time) * 100)).toFixed(1) + "%";
+      var left = document.querySelector('[data-left="' + job.uid + '"]');
+      if (left) left.textContent = fmtDur(Math.max(0, (job.time - job.progress) / speed));
+    });
+    state.pacts.forEach(function (p) {
+      var bar = document.querySelector('[data-pact="' + p.id + '"]');
+      if (bar) bar.style.width = Math.max(0, Math.min(100, (1 - p.remaining / p.total) * 100)).toFixed(1) + "%";
+      var left = document.querySelector('[data-pact-left="' + p.id + '"]');
+      if (left) left.textContent = fmtDur(p.remaining) + " remaining";
+    });
+    var eta = document.getElementById("market-eta");
+    if (eta) eta.textContent = "Restocks in " + fmtDur(Math.max(0, (state.market.nextAt - Date.now()) / 1000));
+    var folds = foldsAvailable();
+    var foldBtn = document.getElementById("fold");
+    var foldAll = document.getElementById("fold-all");
+    foldBtn.textContent = "Fold" + (folds ? " " + Math.min(folds, 99) : "");
+    foldBtn.disabled = folds < 1;
+    foldAll.disabled = folds < 2;
+    var note = document.getElementById("stage-note");
+    note.textContent = "Output ×" + globalMult().toFixed(2) + " · Quench ×" + offlineSpeed().toFixed(2) + " · Away " + Math.round(offlineEff() * 100) + "% for " + fmtDur(offlineCapSeconds()) + " · Anvils " + state.jobs.length + "/" + slots();
+    var suggest = document.getElementById("suggest");
+    var nxt = nextWeapon();
+    if (!nxt) suggest.textContent = "The codex is quiet";
+    else if (state.jobs.length >= slots()) suggest.textContent = "Anvil occupied · " + nxt.name;
+    else if (canAfford(nxt.cost) && needMet(nxt).ok) suggest.textContent = "Forge " + nxt.name;
+    else suggest.textContent = "Toward " + nxt.name + (needMet(nxt).ok ? " · need " + shortfall(nxt.cost) : " · " + needMet(nxt).why);
+    suggest.dataset.wid = nxt ? nxt.id : "";
+    document.querySelectorAll("[data-cost-mat]").forEach(function (el) {
+      var ok = have(el.getAttribute("data-cost-mat")) + 1e-6 >= Number(el.getAttribute("data-cost-need"));
+      el.classList.toggle("short", !ok);
+      el.classList.toggle("ok", ok);
+    });
+    document.querySelectorAll('#panel [data-act="forge"]').forEach(function (btn) {
+      var w = weaponById[btn.getAttribute("data-id")];
+      btn.disabled = !w || state.jobs.length >= slots() || !canAfford(w.cost);
+    });
+    document.querySelectorAll('#panel [data-act="buy"]').forEach(function (btn) {
+      var u = upgradeById[btn.getAttribute("data-id")];
+      if (!u) return;
+      var lv = state.upgrades[u.id] || 0;
+      btn.disabled = lv >= u.max || !canAfford(u.cost(lv));
+    });
+    document.querySelectorAll('#panel [data-act="market"]').forEach(function (btn) {
+      var offer = null;
+      MARKET.forEach(function (m) { if (m.id === btn.getAttribute("data-id")) offer = m; });
+      if (!offer) return;
+      btn.disabled = (state.market.stock[offer.stockKey] || 0) <= 0 || !canAfford(offer.cost);
+    });
+  }
+  function updateMute() {
+    var b = document.getElementById("mute");
+    b.setAttribute("aria-pressed", muted ? "true" : "false");
+    b.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+    b.innerHTML = muted
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 9a4 4 0 010 6"/><path d="M18.5 7a7 7 0 010 10"/></svg>';
+  }
+
+  function openModal(html, dismiss) {
+    var m = document.getElementById("modal");
+    m.dataset.dismiss = dismiss ? "1" : "0";
+    m.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + "</div>";
+    m.classList.remove("hidden");
+  }
+  function closeModal() {
+    document.getElementById("modal").classList.add("hidden");
+  }
+  function modalOpen() { return !document.getElementById("modal").classList.contains("hidden"); }
+  function openGuide() {
+    openModal(
+      "<h2>How the forge works</h2>" +
+      "<h3>Materials</h3><p>The coals draw satetsu, sumi, urushi and whetstone on their own. Strike to raise heat and, while the anvil is empty, to sift a little extra sand. Fold 36 sand and 22 coal into one tamahagane bar. Spirit iron, moon silk and dragon scale are catalogue metals: pacts stand in until other Rokumon games can pay them in.</p>" +
+      "<h3>Workshop</h3><p>Bellows, apprentices and the water wheel speed the work and keep it honest while you are away. Pin a blade once the wheel turns, and the forge will keep quenching that pattern.</p>" +
+      "<h3>Blades</h3><p>Forge up the old steel line, from tanto to odachi. Quality is rolled at the quench. Retire fine work for permanent mastery. When this firing has a tier 6 blade, or you retire a legendary of tier 5 or higher, rekindle: the workshop resets, the codex and the rare metals stay, and the fire burns hotter.</p>" +
+      '<div class="actions"><button type="button" class="btn btn-ember" data-act="guide-dismiss">' + (state.welcomed ? "Close" : "Light the forge") + "</button></div>",
+      true
+    );
+  }
+  function openAway(report) {
+    var rows = "";
+    MATS.forEach(function (m) {
+      if (report.gained[m.id]) rows += '<div class="gain"><span>' + esc(m.name) + "</span><b>+" + fmt(report.gained[m.id]) + "</b></div>";
+    });
+    var blades = Object.keys(report.forged).map(function (id) {
+      return esc(weaponById[id].name) + " ×" + report.forged[id];
+    }).join(", ");
+    var html = "<h2>While you were away</h2>";
+    html += "<p>Gone " + fmtDur(report.away) + ". The coals held for " + fmtDur(report.counted) + " at " + Math.round(report.eff * 100) + "%.</p>";
+    if (report.capped) html += "<p>The fire slept after the cap. Apprentices keep a longer watch.</p>";
+    html += rows || "<p>Little changed in the stock.</p>";
+    if (blades) html += "<p>Quenched: " + blades + ".</p>";
+    if (report.folded) html += "<p>Folded " + fmtInt(report.folded) + " tamahagane.</p>";
+    html += '<div class="actions"><button type="button" class="btn btn-ember" data-act="close">Return to the anvil</button></div>';
+    openModal(html, true);
+  }
+  function openPrestige() {
+    var extra = state.prestige === 0 ? " The outland armoury opens." : (state.prestige === 1 ? " Claymore patterns unlock." : "");
+    openModal(
+      "<h2>Rekindle the forge?</h2><p>Common stock, tamahagane, workshop levels, running pacts and the rack are cleared. Mastery on the rack is banked first. Catalogue metals, codex unlocks and lifetime score remain. The next firing gains another 15% output." + extra + "</p>" +
+      '<div class="actions"><button type="button" class="btn btn-ember" data-act="confirm-prestige">Bank the coals</button><button type="button" class="btn" data-act="close">Not yet</button></div>',
+      true
+    );
+  }
+
+  document.body.addEventListener("click", function (e) {
+    var t = e.target.closest("[data-act]");
+    if (!t || t.disabled) return;
+    var act = t.getAttribute("data-act");
+    var id = t.getAttribute("data-id");
+    if (act === "strike") strike();
+    else if (act === "fold") fold(1);
+    else if (act === "fold-all") fold(Math.min(25, foldsAvailable()));
+    else if (act === "suggest") {
+      var wid = t.dataset.wid;
+      var w = weaponById[wid];
+      if (w && needMet(w).ok && canAfford(w.cost) && state.jobs.length < slots()) startForge(w.id);
+      else { state.selected = wid || state.selected; state.tab = "arms"; dirty = true; }
+    } else if (act === "tab") {
+      state.tab = id;
+      dirty = true;
+      if (window.innerWidth < 861) {
+        var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        requestAnimationFrame(function () {
+          var panel = document.querySelector(".panel");
+          if (panel) panel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+        });
+      }
+    }
+    else if (act === "select") { state.selected = id; state.tab = "arms"; dirty = true; }
+    else if (act === "forge") startForge(id);
+    else if (act === "pin") {
+      state.pinned = state.pinned === id ? null : id;
+      dirty = true;
+      save();
+    } else if (act === "buy") buy(id);
+    else if (act === "pact") startPact(id);
+    else if (act === "market") buyMarket(id);
+    else if (act === "retire") retireUid(Number(t.getAttribute("data-uid")), false);
+    else if (act === "retire-all") retireAll(false);
+    else if (act === "prestige-open") openPrestige();
+    else if (act === "confirm-prestige") doPrestige();
+    else if (act === "howto") openGuide();
+    else if (act === "guide-dismiss") {
+      if (!state.welcomed) { state.welcomed = true; save(); }
+      closeModal();
+    } else if (act === "close") closeModal();
+    else if (act === "mute") {
+      muted = !muted;
+      state.mute = muted;
+      updateMute();
+      save();
+    }
+  });
+  document.body.addEventListener("change", function (e) {
+    if (e.target && e.target.getAttribute("data-act") === "auto") {
+      state.auto = !!e.target.checked && state.upgrades.water >= 1;
+      if (state.auto) tryFill();
+      dirty = true;
+      save();
+    }
+  });
+  document.getElementById("modal").addEventListener("click", function (e) {
+    if (e.target.id === "modal" && document.getElementById("modal").dataset.dismiss === "1") closeModal();
+  });
+  window.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && modalOpen() && document.getElementById("modal").dataset.dismiss === "1") closeModal();
+    if (e.code === "Space" && e.target === document.body && !modalOpen()) {
+      e.preventDefault();
+      strike();
+    }
+  });
+  document.addEventListener("pointerdown", function () { ac(); }, { passive: true });
+
+  window.addEventListener("message", function (ev) {
+    var data = ev.data;
+    if (!data || typeof data !== "object") return;
+    if (data.type !== "rokumon:grant" && data.type !== "hub:material") return;
+    if (ev.source !== window.parent || window.parent === window) return;
+    if (ev.origin !== window.location.origin) return;
+    grantMaterial(data.material, data.amount, data.source);
+  });
+  window.addEventListener("rokumon:grant", function (ev) {
+    var d = ev.detail || {};
+    grantMaterial(d.material, d.amount, d.source);
+  });
+
+  window.RokumonForge = {
+    version: "1.0.0",
+    grantMaterial: grantMaterial,
+    getScore: computeScore,
+    getMaterials: function () {
+      var copy = {};
+      MATS.forEach(function (m) { copy[m.id] = state.mats[m.id]; });
+      return copy;
+    }
+  };
+
+  load();
+  muted = !!state.mute;
+  var bootGap = (Date.now() - (state.lastTick || Date.now())) / 1000;
+  var away = null;
+  if (state.welcomed && bootGap >= 45) away = runOffline(bootGap);
+  else if (bootGap > 1 && bootGap < 45) simulate(Math.min(bootGap, 30), false);
+  state.lastTick = Date.now();
+  refreshMarket();
+  renderResources();
+  renderDynamic();
+  dirty = false;
+  paint();
+  updateMute();
+  if (away && (Object.keys(away.gained).length || Object.keys(away.forged).length || away.folded)) openAway(away);
+  else if (!state.welcomed) openGuide();
+  hubReady();
+
+  var lastSave = 0;
+  function loop() {
+    var now = Date.now();
+    var gap = (now - state.lastTick) / 1000;
+    if (gap >= 45 && state.welcomed) {
+      var report = runOffline(gap);
+      state.lastTick = Date.now();
+      if (!modalOpen() && (Object.keys(report.gained).length || Object.keys(report.forged).length || report.folded)) openAway(report);
+      dirty = true;
+    } else if (gap > 0) {
+      simulate(Math.min(gap, 30), false);
+      state.lastTick = Date.now();
+    }
+    if (now - lastSave > 5000) {
+      lastSave = now;
+      refreshMarket();
+      reportScore(false);
+      save();
+    }
+    if (dirty) { renderDynamic(); dirty = false; }
+    paint();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState === "hidden") save();
+  });
+  window.addEventListener("pagehide", save);
+})();
+</script>
+</body>
+</html>
