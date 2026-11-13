@@ -33,8 +33,12 @@
   }
   button { font: inherit; color: inherit; background: transparent; border: 0; padding: 0; }
   button:not(:disabled), [role="button"]:not(:disabled) { cursor: pointer; }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
-  button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  button:disabled, [aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .sr-only {
+    position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+    overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+  }
   .app {
     min-height: 100dvh;
     max-width: 1120px;
@@ -203,7 +207,7 @@
   .btn-gold { color: var(--gold); border-color: var(--gold-dim); }
   .btn:active:not(:disabled) { transform: translateY(1px); }
   .check { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--ash); }
-  .check input { width: 18px; height: 18px; accent-color: var(--ember); }
+  .check input { width: 24px; height: 24px; margin: 0; accent-color: var(--ember); }
   .gallery {
     display: flex; gap: 8px; overflow-x: auto; padding: 8px 0 12px;
     scroll-snap-type: x mandatory;
@@ -215,7 +219,8 @@
     gap: 2px; position: relative; color: var(--ash); padding: 6px 4px;
   }
   .g-card.on { border-color: var(--gold); color: var(--gold); }
-  .g-card.locked { opacity: 0.45; }
+  .g-card.locked { color: var(--muted); border-style: dashed; }
+  .g-card.locked .g-svg { opacity: 0.5; }
   .g-svg { width: 36px; height: 36px; }
   .g-svg svg, .art svg, .sil { width: 100%; height: 100%; fill: currentColor; }
   .sil .line { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
@@ -338,60 +343,52 @@
       <div class="heat-row"><span>Heat</span><div class="heat"><span id="heatbar"></span></div><span id="heatnum">0</span></div>
       <div class="stage-actions">
         <button type="button" class="btn btn-ember" id="strike" data-act="strike">Strike</button>
-        <button type="button" class="btn" id="fold" data-act="fold">Fold</button>
-        <button type="button" class="btn" id="fold-all" data-act="fold-all">Fold all</button>
+        <button type="button" class="btn" id="fold" data-act="fold" aria-disabled="true">Fold</button>
+        <button type="button" class="btn" id="fold-all" data-act="fold-all" aria-disabled="true">Fold all</button>
       </div>
       <p id="stage-note" class="note"></p>
       <button type="button" class="btn btn-gold suggest" id="suggest" data-act="suggest"></button>
     </section>
     <section class="panel">
-      <div class="tabs" role="tablist">
-        <button type="button" data-act="tab" data-id="arms" role="tab">Arms</button>
-        <button type="button" data-act="tab" data-id="workshop" role="tab">Workshop</button>
-        <button type="button" data-act="tab" data-id="metals" role="tab">Metals</button>
-        <button type="button" data-act="tab" data-id="ledger" role="tab">Ledger</button>
+      <div class="tabs" role="tablist" aria-label="Forge sections">
+        <button type="button" data-act="tab" data-id="arms" role="tab" id="tab-arms" aria-controls="panel">Arms</button>
+        <button type="button" data-act="tab" data-id="workshop" role="tab" id="tab-workshop" aria-controls="panel">Workshop</button>
+        <button type="button" data-act="tab" data-id="metals" role="tab" id="tab-metals" aria-controls="panel">Metals</button>
+        <button type="button" data-act="tab" data-id="ledger" role="tab" id="tab-ledger" aria-controls="panel">Ledger</button>
       </div>
-      <div id="panel" class="panel-body" role="tabpanel"></div>
+      <div id="panel" class="panel-body" role="tabpanel" aria-labelledby="tab-arms"></div>
     </section>
   </div>
   <div id="gallery" class="gallery" aria-label="Weapon gallery"></div>
 </div>
-<div id="toast" role="status"></div>
+<div id="toast" aria-hidden="true"></div>
+<div id="announce" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></div>
 <div id="modal" class="modal hidden"></div>
 <script src="/hub-bridge.js"></script>
-<script id="game">
-(function () {
+<script id="forge-logic">
+/* Rokumon Forge rules. Pure: no DOM, no storage, no timers, no network.
+   Every function takes the state it changes, the time it should use and,
+   where chance matters, a random source. The page script below drives it;
+   the dev-only tests load this block in a VM. */
+(function (root) {
   "use strict";
-  if (!window.Hub) {
-    var embedded = window.parent !== window;
-    function send(payload) {
-      if (!embedded) return;
-      try { window.parent.postMessage(payload, window.location.origin); } catch (e) {}
-    }
-    window.Hub = {
-      version: 1,
-      embedded: embedded,
-      ready: function () { send({ type: "hub:ready", version: 1 }); },
-      score: function (score) {
-        if (typeof score !== "number" || !isFinite(score)) return;
-        send({ type: "hub:score", score: score });
-      },
-      gameOver: function (score, durationMs) {
-        if (typeof score !== "number" || !isFinite(score)) return;
-        send({ type: "hub:gameover", score: score, durationMs: durationMs });
-      },
-      progress: function (key, value) { send({ type: "hub:progress", key: key, value: value }); },
-      achievement: function (id) { send({ type: "hub:achievement", id: id }); },
-      event: function (name, data) {
-        if (typeof name !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name)) return;
-        if (!data || typeof data !== "object" || Array.isArray(data)) return;
-        send({ type: "hub:event", version: 1, name: name, data: data });
-      }
-    };
-  }
 
   var SAVE_KEY = "rokumon-forge-v1";
+  var BACKUP_KEY = "rokumon-forge-v1-unreadable";
+  var SAVE_VERSION = 2;
+  var OFFLINE_MIN_GAP = 45;               // seconds; shorter gaps count as live play
+  var CLOCK_FORGIVE_MS = 24 * 3600 * 1000; // a save from further in the future than this is treated as a wrong clock
+  var MARKET_INTERVAL = 8 * 60 * 1000;
+  var MAX_AMOUNT = 1e15;
+  var MAX_COUNT = 1e9;
+  var MAX_PRESTIGE = 1000;
+  var RACK_SIZE = 40;
+  var JOURNAL_SIZE = 18;
+  var GRANT_MAX = 25;
+  var GRANT_PER_MINUTE = 12;
+
   var FOLD = { satetsu: 36, sumi: 22 };
+  var Q_ORDER = ["crude", "serviceable", "fine", "masterwork", "legendary"];
   var Q_RANK = { crude: 0, serviceable: 1, fine: 2, masterwork: 3, legendary: 4 };
   var Q_NAME = { crude: "Crude", serviceable: "Serviceable", fine: "Fine", masterwork: "Masterwork", legendary: "Legendary" };
   var Q_MULT = { crude: 0.7, serviceable: 1, fine: 1.55, masterwork: 2.4, legendary: 4 };
@@ -407,7 +404,7 @@
     { id: "silk", name: "Moon silk", rare: true },
     { id: "scale", name: "Dragon scale", rare: true }
   ];
-  var MAT_NAME = {};
+  var MAT_NAME = Object.create(null);
   MATS.forEach(function (m) { MAT_NAME[m.id] = m.name; });
   var MAT_ALIAS = {
     spirit: "spirit", "spirit-iron": "spirit", reitekkou: "spirit", spiritiron: "spirit",
@@ -443,6 +440,7 @@
     { id: "rapier", name: "Rapier", kana: "", tier: 7, line: "outland", value: 1400, time: 30, cost: { tamahagane: 50, spirit: 8, urushi: 20 }, need: { jian: 1 }, prestige: 1, lore: "A needle with a guard. Manners, then the point." },
     { id: "claymore", name: "Claymore", kana: "", tier: 9, line: "outland", value: 4200, time: 55, cost: { tamahagane: 100, spirit: 16, scale: 4 }, need: { shamshir: 1, rapier: 1 }, prestige: 2, lore: "A great sword from a colder island. Scales in the fuller." }
   ];
+  var MAX_TIER = 9;
 
   var PACTS = [
     { id: "pilgrimage", name: "Iron pilgrimage", seconds: 120, gain: { spirit: 1 }, blurb: "A runner returns with spirit iron." },
@@ -450,11 +448,824 @@
     { id: "scale", name: "Scale hunt", seconds: 360, gain: { scale: 1 }, blurb: "Opens after any tier 4 blade. One scale, if the hunter returns.", gate: "tier4" }
   ];
 
+  var MARKET_STOCK = { spirit: 2, silk: 2, scale: 1 };
   var MARKET = [
     { id: "spirit", stockKey: "spirit", cost: { satetsu: 380 }, gain: { spirit: 1 }, label: "1 spirit iron" },
     { id: "silk", stockKey: "silk", cost: { urushi: 70 }, gain: { silk: 1 }, label: "1 moon silk" },
     { id: "scale", stockKey: "scale", cost: { spirit: 4, silk: 2 }, gain: { scale: 1 }, label: "1 dragon scale" }
   ];
+
+  var TABS = ["arms", "workshop", "metals", "ledger"];
+
+  var weaponById = Object.create(null);
+  WEAPONS.forEach(function (w) { weaponById[w.id] = w; });
+  var upgradeById = Object.create(null);
+  UPGRADES.forEach(function (u) { upgradeById[u.id] = u; });
+  var pactById = Object.create(null);
+  PACTS.forEach(function (p) { pactById[p.id] = p; });
+  var marketById = Object.create(null);
+  MARKET.forEach(function (m) { marketById[m.id] = m; });
+
+  function own(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+  function isObj(v) { return !!v && typeof v === "object" && !Array.isArray(v); }
+  /* A finite number inside [lo, hi], or the fallback. Strings, NaN, Infinity and
+     out-of-range values never reach the state. */
+  function num(v, lo, hi, dflt) {
+    if (typeof v !== "number" || !isFinite(v)) return dflt;
+    return Math.min(hi, Math.max(lo, v));
+  }
+  function int(v, lo, hi, dflt) {
+    var n = num(v, lo, hi, dflt);
+    return n === dflt ? n : Math.floor(n);
+  }
+
+  // ---------- state ----------
+
+  function freshMats() {
+    var o = {};
+    MATS.forEach(function (m) { o[m.id] = 0; });
+    return o;
+  }
+  function freshUpgrades() {
+    var o = {};
+    UPGRADES.forEach(function (u) { o[u.id] = 0; });
+    return o;
+  }
+  function defaultState(now) {
+    now = typeof now === "number" && isFinite(now) ? now : 0;
+    return {
+      v: SAVE_VERSION,
+      mats: freshMats(),
+      upgrades: freshUpgrades(),
+      forged: {},
+      best: {},
+      retired: {},
+      rack: [],
+      jobs: [],
+      pacts: [],
+      market: { nextAt: now + MARKET_INTERVAL, stock: { spirit: MARKET_STOCK.spirit, silk: MARKET_STOCK.silk, scale: MARKET_STOCK.scale } },
+      prestige: 0,
+      mastery: 0,
+      lifetimeValue: 0,
+      highestTier: 0,
+      pinned: "tanto",
+      selected: "tanto",
+      auto: false,
+      tab: "arms",
+      welcomed: false,
+      mute: false,
+      heat: 0,
+      runStart: now,
+      lastTick: now,
+      journal: [],
+      stats: { forgedTotal: 0, strikes: 0, pactsDone: 0, retiredTotal: 0 },
+      run: { bestTier: 0, legendRetires: 0 },
+      uid: 1,
+      foldFrac: 0
+    };
+  }
+
+  /* Build a clean state from anything that came out of storage. Unknown keys are
+     dropped, every number is clamped to a finite range, ids are checked against
+     the tables, and anything the player could not have reached by playing
+     (levels above max, a job that takes no time) is pulled back into range. */
+  function sanitize(data, now) {
+    var s = defaultState(now);
+    var fixes = 0;
+    function fix() { fixes++; }
+    if (!isObj(data)) return { state: s, fixes: 1 };
+
+    if (isObj(data.mats)) {
+      MATS.forEach(function (m) {
+        if (!own(data.mats, m.id)) return;
+        var v = num(data.mats[m.id], 0, MAX_AMOUNT, 0);
+        if (v !== data.mats[m.id]) fix();
+        s.mats[m.id] = v;
+      });
+    } else if (data.mats !== undefined) fix();
+
+    if (isObj(data.upgrades)) {
+      UPGRADES.forEach(function (u) {
+        if (!own(data.upgrades, u.id)) return;
+        var v = int(data.upgrades[u.id], 0, u.max, 0);
+        if (v !== data.upgrades[u.id]) fix();
+        s.upgrades[u.id] = v;
+      });
+    } else if (data.upgrades !== undefined) fix();
+
+    ["forged", "retired"].forEach(function (key) {
+      if (!isObj(data[key])) { if (data[key] !== undefined) fix(); return; }
+      WEAPONS.forEach(function (w) {
+        if (!own(data[key], w.id)) return;
+        var v = int(data[key][w.id], 0, MAX_COUNT, 0);
+        if (v !== data[key][w.id]) fix();
+        if (v > 0) s[key][w.id] = v;
+      });
+    });
+    if (isObj(data.best)) {
+      WEAPONS.forEach(function (w) {
+        if (!own(data.best, w.id)) return;
+        if (own(Q_RANK, data.best[w.id]) && (s.forged[w.id] || 0) > 0) s.best[w.id] = data.best[w.id];
+        else fix();
+      });
+    }
+
+    s.prestige = int(data.prestige, 0, MAX_PRESTIGE, 0);
+    s.mastery = int(data.mastery, 0, MAX_COUNT, 0);
+    s.lifetimeValue = num(data.lifetimeValue, 0, MAX_AMOUNT, 0);
+    var forgedTier = 0;
+    WEAPONS.forEach(function (w) { if ((s.forged[w.id] || 0) > 0 && w.tier > forgedTier) forgedTier = w.tier; });
+    s.highestTier = forgedTier; // derived from the codex, so it cannot disagree with it
+    if (data.prestige !== s.prestige || data.mastery !== s.mastery || data.highestTier !== forgedTier) fix();
+
+    var maxUid = 1;
+    if (Array.isArray(data.rack)) {
+      data.rack.slice(-RACK_SIZE).forEach(function (r) {
+        if (!isObj(r) || !weaponById[r.id] || !own(Q_RANK, r.quality)) { fix(); return; }
+        var uid = int(r.uid, 1, MAX_COUNT * 10, 0);
+        if (!uid) { fix(); return; }
+        maxUid = Math.max(maxUid, uid);
+        var w = weaponById[r.id];
+        s.rack.push({ uid: uid, id: r.id, quality: r.quality, value: num(r.value, 0, w.value * Q_MULT.legendary * (1 + MAX_PRESTIGE * 0.05), 0), at: num(r.at, 0, 1e14, 0) });
+      });
+    } else if (data.rack !== undefined) fix();
+
+    s.run.bestTier = int(isObj(data.run) ? data.run.bestTier : 0, 0, MAX_TIER, 0);
+    s.run.legendRetires = int(isObj(data.run) ? data.run.legendRetires : 0, 0, MAX_COUNT, 0);
+    if (isObj(data.stats)) {
+      Object.keys(s.stats).forEach(function (k) { s.stats[k] = int(data.stats[k], 0, MAX_COUNT * 10, 0); });
+    }
+
+    var slotCount = slots(s);
+    if (Array.isArray(data.jobs)) {
+      data.jobs.forEach(function (j) {
+        if (!isObj(j) || !weaponById[j.id] || s.jobs.length >= slotCount) { fix(); return; }
+        var w = weaponById[j.id];
+        var uid = int(j.uid, 1, MAX_COUNT * 10, 0) || (maxUid + 1);
+        maxUid = Math.max(maxUid, uid);
+        if (j.time !== w.time || typeof j.progress !== "number" || !isFinite(j.progress)) fix();
+        s.jobs.push({ id: w.id, progress: num(j.progress, 0, w.time, 0), time: w.time, uid: uid, auto: j.auto === true });
+      });
+    } else if (data.jobs !== undefined) fix();
+
+    var pactCount = pactSlots(s);
+    if (Array.isArray(data.pacts)) {
+      data.pacts.forEach(function (p) {
+        var def = isObj(p) && pactById[p.id];
+        if (!def || s.pacts.length >= pactCount || s.pacts.some(function (x) { return x.id === p.id; })) { fix(); return; }
+        var full = def.seconds;
+        var total = num(p.total, 1, full, pactDuration(s, def));
+        s.pacts.push({ id: def.id, remaining: num(p.remaining, 0, total, total), total: total });
+      });
+    } else if (data.pacts !== undefined) fix();
+
+    if (isObj(data.market)) {
+      var nowMs = typeof now === "number" && isFinite(now) ? now : 0;
+      s.market.nextAt = num(data.market.nextAt, 0, nowMs + MARKET_INTERVAL, nowMs + MARKET_INTERVAL);
+      if (isObj(data.market.stock)) {
+        Object.keys(MARKET_STOCK).forEach(function (k) {
+          s.market.stock[k] = int(data.market.stock[k], 0, MARKET_STOCK[k], MARKET_STOCK[k]);
+        });
+      }
+    }
+
+    s.pinned = data.pinned === null ? null : (weaponById[data.pinned] ? data.pinned : "tanto");
+    s.selected = weaponById[data.selected] ? data.selected : "tanto";
+    s.auto = data.auto === true && s.upgrades.water >= 1;
+    s.tab = TABS.indexOf(data.tab) >= 0 ? data.tab : "arms";
+    s.welcomed = data.welcomed === true;
+    s.mute = data.mute === true;
+    s.heat = 0; // heat cools in real time and never survives a reload
+    s.runStart = num(data.runStart, 0, 1e14, s.runStart);
+    s.lastTick = num(data.lastTick, 0, 1e14, s.lastTick);
+    s.foldFrac = num(data.foldFrac, 0, 1, 0);
+    s.uid = Math.max(maxUid, int(data.uid, 1, MAX_COUNT * 10, 1));
+    if (Array.isArray(data.journal)) {
+      data.journal.slice(0, JOURNAL_SIZE).forEach(function (e) {
+        if (!isObj(e) || typeof e.text !== "string") { fix(); return; }
+        s.journal.push({ t: num(e.t, 0, 1e14, 0), text: e.text.slice(0, 200) });
+      });
+    }
+    return { state: s, fixes: fixes };
+  }
+
+  function serialize(s) { return JSON.stringify(s); }
+
+  /* raw: the string from storage, or null. status is "fresh" (nothing saved),
+     "loaded" (a save we understand, cleaned) or "reset" (unreadable, so a new
+     forge starts and the caller should keep the raw text aside). */
+  function parseSave(raw, now) {
+    if (raw === null || raw === undefined || raw === "") return { state: defaultState(now), status: "fresh", fixes: 0 };
+    var data;
+    try { data = JSON.parse(raw); } catch (e) { return { state: defaultState(now), status: "reset", reason: "not JSON", fixes: 0 }; }
+    if (!isObj(data)) return { state: defaultState(now), status: "reset", reason: "not an object", fixes: 0 };
+    if (data.v !== 1 && data.v !== SAVE_VERSION) return { state: defaultState(now), status: "reset", reason: "unknown version", fixes: 0 };
+    var out = sanitize(data, now);
+    return { state: out.state, status: "loaded", fixes: out.fixes, migrated: data.v !== SAVE_VERSION };
+  }
+
+  // ---------- formulas ----------
+
+  function have(s, id) { return s.mats[id] || 0; }
+  function canAfford(s, cost) {
+    if (!cost) return false;
+    for (var k in cost) if (own(cost, k) && have(s, k) + 1e-6 < cost[k]) return false;
+    return true;
+  }
+  function pay(s, cost) {
+    for (var k in cost) {
+      if (!own(cost, k)) continue;
+      s.mats[k] -= cost[k];
+      if (s.mats[k] < 0.0001) s.mats[k] = 0;
+    }
+  }
+  function addMat(s, id, amount) {
+    s.mats[id] = Math.min(MAX_AMOUNT, Math.max(0, (s.mats[id] || 0) + amount));
+  }
+  function shortfall(s, cost) {
+    for (var k in cost) {
+      if (!own(cost, k)) continue;
+      var need = cost[k] - have(s, k);
+      if (need > 0.05) return Math.ceil(need) + " " + MAT_NAME[k];
+    }
+    return "";
+  }
+  function upgradeCost(id, lv) {
+    var u = upgradeById[id];
+    if (!u || lv >= u.max) return null;
+    return u.cost(lv);
+  }
+  function slots(s) {
+    var n = 1;
+    if (s.upgrades.apprentices >= 4) n++;
+    if (s.upgrades.apprentices >= 8) n++;
+    return n;
+  }
+  function masteryBonus(s) { return Math.min(1, s.mastery * 0.0025); }
+  function globalMult(s) { return 1 + s.prestige * 0.15 + masteryBonus(s); }
+  function rates(s) {
+    var u = s.upgrades;
+    var m = globalMult(s);
+    return {
+      satetsu: (0.9 + u.bellows * 0.48) * m,
+      sumi: (0.55 + u.bellows * 0.28) * m,
+      urushi: (0.03 + u.lacquer * 0.065) * m,
+      whetstone: (0.018 + u.wheel * 0.04) * m,
+      tamahagane: u.folder * 0.012 * m
+    };
+  }
+  function heatOf(s) { return Math.min(100, Math.max(0, s.heat || 0)); }
+  function offlineSpeed(s) { return 1 + s.upgrades.water * 0.14; }
+  function forgeSpeed(s, offline) { return offline ? offlineSpeed(s) : offlineSpeed(s) * (1 + heatOf(s) / 140); }
+  function heatDecay(s) { return Math.max(1.2, 5.5 - s.upgrades.heart * 0.18); }
+  function skillBonus(s, heat) {
+    return s.upgrades.wheel * 2 + s.upgrades.heart * 2.6 + s.prestige * 3.5 + Math.min(100, Math.max(0, heat || 0)) * 0.1;
+  }
+  function offlineCapSeconds(s) { return Math.min(12, 4 + s.upgrades.apprentices * 0.8) * 3600; }
+  function offlineEff(s) { return Math.min(1, 0.35 + s.upgrades.apprentices * 0.07); }
+  function pactSlots(s) { return 1 + (s.upgrades.bell >= 5 ? 1 : 0); }
+  function pactDuration(s, p) { return p.seconds / (1 + s.upgrades.bell * 0.12); }
+  function foldsAvailable(s) {
+    return Math.floor(Math.min(have(s, "satetsu") / FOLD.satetsu, have(s, "sumi") / FOLD.sumi));
+  }
+  function tier4Forged(s) {
+    return WEAPONS.some(function (w) { return w.tier >= 4 && (s.forged[w.id] || 0) > 0; });
+  }
+  function pactOpen(s, p) { return p.gate === "tier4" ? tier4Forged(s) : true; }
+  function roman(n) {
+    var map = [[1000, "M"], [900, "CM"], [500, "D"], [400, "CD"], [100, "C"], [90, "XC"], [50, "L"], [40, "XL"], [10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
+    var out = "";
+    n = Math.max(0, Math.floor(Number(n) || 0));
+    if (!n) return "—";
+    if (n > 3999) return String(n);
+    map.forEach(function (pair) {
+      while (n >= pair[0]) { out += pair[1]; n -= pair[0]; }
+    });
+    return out;
+  }
+  function needMet(s, w) {
+    if ((w.prestige || 0) > s.prestige) return { ok: false, why: "Prestige " + roman(w.prestige) };
+    if (w.need) {
+      for (var id in w.need) {
+        if ((s.forged[id] || 0) < w.need[id]) {
+          var name = weaponById[id] ? weaponById[id].name : id;
+          var n = w.need[id];
+          return { ok: false, why: "Forge " + (n > 1 ? n + " " : "a ") + name };
+        }
+      }
+    }
+    return { ok: true };
+  }
+  function qualityFromRoll(roll) {
+    if (roll >= 112) return "legendary";
+    if (roll >= 90) return "masterwork";
+    if (roll >= 68) return "fine";
+    if (roll >= 38) return "serviceable";
+    return "crude";
+  }
+  function rollQuality(s, heat, rng) {
+    var r = typeof rng === "function" ? rng() : Math.random();
+    if (!(r >= 0 && r < 1)) r = 0;
+    return qualityFromRoll(r * 100 + skillBonus(s, heat));
+  }
+  function quenchValue(s, w, quality) {
+    return Math.max(1, Math.round(w.value * Q_MULT[quality] * (1 + s.prestige * 0.05)));
+  }
+  function masteryGain(item) {
+    if ((Q_RANK[item.quality] || 0) < 1) return 0;
+    var w = weaponById[item.id];
+    if (!w) return 0;
+    return (Q_MASTERY[item.quality] || 0) + Math.floor(w.tier / 2);
+  }
+  function computeScore(s) {
+    return Math.floor(s.lifetimeValue + s.prestige * 1000 + s.highestTier * 25 + s.mastery * 15);
+  }
+  function canPrestige(s) {
+    return (s.run.bestTier || 0) >= 6 || (s.run.legendRetires || 0) > 0;
+  }
+  function outlook(s) {
+    var b = skillBonus(s, s.heat);
+    if (b >= 36) return "The quench can reach legendary.";
+    if (b >= 22) return "Masterwork is a fair hope.";
+    if (b >= 10) return "Fine work is becoming common.";
+    return "Most blades leave serviceable.";
+  }
+  function nextWeapon(s) {
+    var pinned = s.pinned && weaponById[s.pinned];
+    if (pinned && needMet(s, pinned).ok && (s.forged[pinned.id] || 0) === 0) return pinned;
+    var open = WEAPONS.filter(function (w) { return needMet(s, w).ok; });
+    var fresh = open.filter(function (w) { return !(s.forged[w.id] > 0); });
+    fresh.sort(function (a, b) { return a.tier - b.tier || a.value - b.value; });
+    var i;
+    for (i = 0; i < fresh.length; i++) if (canAfford(s, fresh[i].cost)) return fresh[i];
+    if (fresh.length) return fresh[0];
+    if (pinned && needMet(s, pinned).ok) return pinned;
+    var afford = open.filter(function (w) { return canAfford(s, w.cost); });
+    afford.sort(function (a, b) { return b.tier - a.tier; });
+    if (afford.length) return afford[0];
+    open.sort(function (a, b) { return a.tier - b.tier; });
+    return open[0] || WEAPONS[0];
+  }
+
+  // ---------- simulation ----------
+
+  /* ctx carries what a pure step needs from outside: the wall time to stamp
+     records with, a random source, whether this is offline catch-up, and an
+     events list the page turns into sound, toasts, announcements and hub events. */
+  function makeCtx(opts) {
+    opts = opts || {};
+    return {
+      now: typeof opts.now === "number" ? opts.now : 0,
+      rng: typeof opts.rng === "function" ? opts.rng : Math.random,
+      offline: !!opts.offline,
+      events: [],
+      report: opts.offline ? { forged: {}, folded: 0, blades: 0 } : null
+    };
+  }
+  function emit(ctx, ev) { if (ctx && ctx.events) ctx.events.push(ev); }
+  function journal(s, text, now) {
+    s.journal.unshift({ t: now || 0, text: String(text).slice(0, 200) });
+    if (s.journal.length > JOURNAL_SIZE) s.journal.length = JOURNAL_SIZE;
+  }
+
+  function produce(s, dt, ctx) {
+    var r = rates(s);
+    addMat(s, "satetsu", r.satetsu * dt);
+    addMat(s, "sumi", r.sumi * dt);
+    addMat(s, "urushi", r.urushi * dt);
+    addMat(s, "whetstone", r.whetstone * dt);
+    s.foldFrac += r.tamahagane * dt;
+    var n = Math.floor(s.foldFrac);
+    if (n > 0) {
+      var can = Math.min(n, foldsAvailable(s));
+      if (can > 0) {
+        s.mats.satetsu -= can * FOLD.satetsu;
+        s.mats.sumi -= can * FOLD.sumi;
+        addMat(s, "tamahagane", can);
+        s.foldFrac -= can;
+        if (ctx.report) ctx.report.folded += can;
+      }
+      s.foldFrac = Math.min(s.foldFrac, 1);
+    }
+  }
+  function completeJob(s, job, ctx) {
+    var w = weaponById[job.id];
+    if (!w) return;
+    var heat = ctx.offline ? 0 : s.heat;
+    var quality = rollQuality(s, heat, ctx.rng);
+    var value = quenchValue(s, w, quality);
+    var first = !(s.forged[w.id] > 0);
+    s.forged[w.id] = Math.min(MAX_COUNT, (s.forged[w.id] || 0) + 1);
+    if (s.best[w.id] === undefined || Q_RANK[quality] >= Q_RANK[s.best[w.id]]) s.best[w.id] = quality;
+    if (w.tier > s.highestTier) s.highestTier = w.tier;
+    if (w.tier > (s.run.bestTier || 0)) s.run.bestTier = w.tier;
+    s.lifetimeValue = Math.min(MAX_AMOUNT, s.lifetimeValue + value);
+    s.stats.forgedTotal++;
+    s.uid++;
+    s.rack.push({ uid: s.uid, id: w.id, quality: quality, value: value, at: ctx.now });
+    while (s.rack.length > RACK_SIZE) s.rack.shift();
+    if (ctx.report) {
+      ctx.report.forged[w.id] = (ctx.report.forged[w.id] || 0) + 1;
+      ctx.report.blades++;
+    } else {
+      journal(s, Q_NAME[quality] + " " + w.name + " quenched (" + Math.floor(value).toLocaleString("en-GB") + ")", ctx.now);
+    }
+    emit(ctx, { type: "forged", id: w.id, tier: w.tier, quality: quality, value: value, auto: !!job.auto, first: first });
+  }
+  function resolveJobs(s, ctx) {
+    var done = s.jobs.filter(function (j) { return j.progress >= j.time - 1e-6; });
+    if (!done.length) return 0;
+    s.jobs = s.jobs.filter(function (j) { return j.progress < j.time - 1e-6; });
+    done.forEach(function (j) { completeJob(s, j, ctx); });
+    tryFill(s, ctx);
+    return done.length;
+  }
+  function advanceJobs(s, dt, ctx) {
+    if (!s.jobs.length) return;
+    var speed = forgeSpeed(s, ctx.offline);
+    s.jobs.forEach(function (j) { j.progress += dt * speed; });
+    resolveJobs(s, ctx);
+  }
+  function finishPact(s, p, ctx) {
+    var def = pactById[p.id];
+    if (!def) return;
+    var mat = Object.keys(def.gain)[0];
+    var amount = def.gain[mat];
+    addMat(s, mat, amount);
+    s.stats.pactsDone++;
+    if (!ctx.offline) journal(s, def.name + " returned with " + MAT_NAME[mat], ctx.now);
+    emit(ctx, { type: "pact", id: p.id, material: mat, amount: amount });
+  }
+  function advancePacts(s, dt, ctx) {
+    if (!s.pacts.length) return;
+    s.pacts.forEach(function (p) { p.remaining -= dt; });
+    var done = s.pacts.filter(function (p) { return p.remaining <= 0; });
+    if (!done.length) return;
+    s.pacts = s.pacts.filter(function (p) { return p.remaining > 0; });
+    done.forEach(function (p) { finishPact(s, p, ctx); });
+  }
+  function step(s, dt, ctx) {
+    if (!ctx.offline) s.heat = Math.max(0, heatOf(s) - heatDecay(s) * dt);
+    produce(s, dt, ctx);
+    advanceJobs(s, dt, ctx);
+    advancePacts(s, dt, ctx);
+  }
+  /* Advance by elapsed seconds. Every rate is per second and steps are at most
+     a quarter second, so the result does not depend on the frame rate. */
+  function simulate(s, seconds, ctx) {
+    if (typeof seconds !== "number" || !(seconds > 0) || !isFinite(seconds)) return;
+    var maxSteps = ctx.offline ? 80000 : 4000;
+    var steps = Math.min(maxSteps, Math.max(1, Math.ceil(seconds / 0.25)));
+    var dt = seconds / steps;
+    for (var i = 0; i < steps; i++) step(s, dt, ctx);
+  }
+
+  /* Seconds of wall time since the save was last advanced. A clock that moved
+     backwards gives zero (and the high-water mark stays, so winding the clock
+     back and forward again cannot pay twice). A save stamped more than a day in
+     the future is treated as a broken clock and forgiven. */
+  function wallGap(s, now) {
+    if (typeof now !== "number" || !isFinite(now)) return 0;
+    if (!(typeof s.lastTick === "number" && isFinite(s.lastTick))) { s.lastTick = now; return 0; }
+    if (s.lastTick - now > CLOCK_FORGIVE_MS) { s.lastTick = now; return 0; }
+    return Math.max(0, (now - s.lastTick) / 1000);
+  }
+  function markTime(s, now) {
+    if (typeof now === "number" && isFinite(now) && now > s.lastTick) s.lastTick = now;
+  }
+  function offlinePlan(s, gap) {
+    var cap = offlineCapSeconds(s);
+    var away = Math.max(0, Number(gap) || 0);
+    var counted = Math.min(away, cap);
+    var eff = offlineEff(s);
+    return { away: away, cap: cap, counted: counted, eff: eff, simSeconds: counted * eff, capped: away > cap + 5 };
+  }
+  /* Catch up after an absence. Capped, slower than live play, and the heat and
+     strike bonuses do not apply. Returns what changed for the away note. */
+  function runOffline(s, gap, ctx) {
+    var plan = offlinePlan(s, gap);
+    var before = {};
+    MATS.forEach(function (m) { before[m.id] = s.mats[m.id]; });
+    var octx = makeCtx({ offline: true, now: ctx ? ctx.now : 0, rng: ctx ? ctx.rng : Math.random });
+    s.heat = 0;
+    simulate(s, plan.simSeconds, octx);
+    var report = octx.report;
+    report.away = plan.away;
+    report.counted = plan.counted;
+    report.eff = plan.eff;
+    report.cap = plan.cap;
+    report.capped = plan.capped;
+    report.gained = {};
+    MATS.forEach(function (m) {
+      var d = s.mats[m.id] - (before[m.id] || 0);
+      if (d > 0.5) report.gained[m.id] = d;
+    });
+    report.events = octx.events;
+    if (report.blades || Object.keys(report.gained).length) {
+      journal(s, "While you were away: " + (report.blades ? report.blades + " blade" + (report.blades === 1 ? "" : "s") : "the coals held"), octx.now);
+    }
+    return report;
+  }
+
+  // ---------- player actions ----------
+  // Each returns { ok, reason } and pushes events into ctx.
+
+  function startForge(s, id, ctx, auto) {
+    var w = weaponById[id];
+    if (!w) return { ok: false, reason: "Unknown blade" };
+    var gate = needMet(s, w);
+    if (!gate.ok) return { ok: false, reason: gate.why };
+    if (s.jobs.length >= slots(s)) return { ok: false, reason: "The anvil is occupied" };
+    if (!canAfford(s, w.cost)) return { ok: false, reason: "Short on materials" };
+    pay(s, w.cost);
+    s.uid++;
+    s.jobs.push({ id: w.id, progress: 0, time: w.time, uid: s.uid, auto: !!auto });
+    emit(ctx, { type: "forge-started", id: w.id, auto: !!auto });
+    return { ok: true };
+  }
+  function tryFill(s, ctx) {
+    if (!s.auto || s.upgrades.water < 1 || !s.pinned) return;
+    var w = weaponById[s.pinned];
+    if (!w) return;
+    var guard = 0;
+    while (s.jobs.length < slots(s) && guard++ < 8) {
+      if (!startForge(s, w.id, ctx, true).ok) break;
+    }
+  }
+  function setAuto(s, on, ctx) {
+    s.auto = !!on && s.upgrades.water >= 1;
+    if (s.auto) tryFill(s, ctx);
+    return { ok: s.auto === !!on };
+  }
+  function togglePin(s, id) {
+    if (!weaponById[id]) return { ok: false };
+    s.pinned = s.pinned === id ? null : id;
+    return { ok: true, pinned: s.pinned };
+  }
+  function startPact(s, id, ctx) {
+    var def = pactById[id];
+    if (!def || !pactOpen(s, def)) return { ok: false, reason: "That road is closed" };
+    if (s.pacts.some(function (p) { return p.id === id; })) return { ok: false, reason: "Already on the road" };
+    if (s.pacts.length >= pactSlots(s)) return { ok: false, reason: "Every runner is already out" };
+    var dur = pactDuration(s, def);
+    s.pacts.push({ id: id, remaining: dur, total: dur });
+    emit(ctx, { type: "pact-started", id: id });
+    return { ok: true };
+  }
+  function fold(s, n, ctx) {
+    var want = Math.floor(Number(n) || 0);
+    var can = Math.min(want, foldsAvailable(s));
+    if (can <= 0) return { ok: false, reason: "Need 36 satetsu and 22 sumi" };
+    s.mats.satetsu -= can * FOLD.satetsu;
+    s.mats.sumi -= can * FOLD.sumi;
+    if (s.mats.satetsu < 0.0001) s.mats.satetsu = 0;
+    if (s.mats.sumi < 0.0001) s.mats.sumi = 0;
+    addMat(s, "tamahagane", can);
+    if (can >= 5) journal(s, "Folded " + can + " tamahagane", ctx.now);
+    emit(ctx, { type: "folded", n: can });
+    return { ok: true, n: can };
+  }
+  function strike(s, ctx) {
+    s.stats.strikes++;
+    s.heat = Math.min(100, heatOf(s) + 13);
+    if (s.jobs.length) {
+      var job = s.jobs.slice().sort(function (a, b) { return (b.progress / b.time) - (a.progress / a.time); })[0];
+      job.progress += 0.55 * forgeSpeed(s, false);
+      resolveJobs(s, ctx);
+    } else if (s.mats.satetsu < 400) {
+      var damp = s.mats.satetsu > 180 ? 0.35 : 1;
+      addMat(s, "satetsu", 1.05 * damp);
+      addMat(s, "sumi", 0.6 * damp);
+    }
+    return { ok: true };
+  }
+  function buyUpgrade(s, id, ctx) {
+    var u = upgradeById[id];
+    if (!u) return { ok: false, reason: "Unknown upgrade" };
+    var lv = s.upgrades[id] || 0;
+    if (lv >= u.max) return { ok: false, reason: u.name + " is at its last level" };
+    var cost = u.cost(lv);
+    if (!canAfford(s, cost)) return { ok: false, reason: "Short on materials" };
+    pay(s, cost);
+    s.upgrades[id] = lv + 1;
+    journal(s, u.name + " " + s.upgrades[id], ctx.now);
+    emit(ctx, { type: "upgraded", id: id, level: s.upgrades[id] });
+    return { ok: true, level: s.upgrades[id] };
+  }
+  function buyMarket(s, id, ctx) {
+    var offer = marketById[id];
+    if (!offer) return { ok: false, reason: "Unknown trade" };
+    if ((s.market.stock[offer.stockKey] || 0) <= 0) return { ok: false, reason: "Sold for this watch" };
+    if (!canAfford(s, offer.cost)) return { ok: false, reason: "Short on materials" };
+    pay(s, offer.cost);
+    for (var k in offer.gain) if (own(offer.gain, k)) addMat(s, k, offer.gain[k]);
+    s.market.stock[offer.stockKey]--;
+    journal(s, "Night market: " + offer.label, ctx.now);
+    emit(ctx, { type: "traded", id: id, label: offer.label });
+    return { ok: true };
+  }
+  function retire(s, uid, ctx, quiet) {
+    var index = -1;
+    for (var i = 0; i < s.rack.length; i++) if (s.rack[i].uid === uid) index = i;
+    if (index < 0) return { ok: false, gain: 0, reason: "That blade has left the rack" };
+    var item = s.rack[index];
+    var w = weaponById[item.id];
+    var gain = masteryGain(item);
+    s.rack.splice(index, 1);
+    if (gain > 0) {
+      s.mastery = Math.min(MAX_COUNT, s.mastery + gain);
+      s.retired[item.id] = (s.retired[item.id] || 0) + 1;
+      s.stats.retiredTotal++;
+      if (item.quality === "legendary" && w && w.tier >= 5) s.run.legendRetires = (s.run.legendRetires || 0) + 1;
+      if (!quiet) {
+        journal(s, "Retired " + Q_NAME[item.quality] + " " + w.name + " (+" + gain + " mastery)", ctx.now);
+        emit(ctx, { type: "retired", id: item.id, tier: w.tier, gain: gain, mastery: s.mastery });
+      }
+    } else if (!quiet) {
+      emit(ctx, { type: "set-aside", id: item.id });
+    }
+    return { ok: true, gain: gain };
+  }
+  function retireAll(s, ctx, quiet) {
+    var ids = s.rack.map(function (r) { return r.uid; });
+    var total = 0;
+    ids.forEach(function (uid) { total += retire(s, uid, ctx, true).gain; });
+    if (!quiet) {
+      if (total > 0) journal(s, "Rack retired for " + total + " mastery", ctx.now);
+      emit(ctx, { type: "retired-all", gain: total, mastery: s.mastery });
+    }
+    return { ok: true, gain: total };
+  }
+  function prestige(s, ctx) {
+    if (!canPrestige(s)) return { ok: false, reason: "This firing has not earned a rekindle" };
+    var scoreBefore = computeScore(s);
+    var duration = Math.max(0, (ctx.now || 0) - (s.runStart || 0));
+    retireAll(s, ctx, true);
+    var keep = { spirit: s.mats.spirit, silk: s.mats.silk, scale: s.mats.scale };
+    s.mats = freshMats();
+    s.mats.spirit = keep.spirit;
+    s.mats.silk = keep.silk;
+    s.mats.scale = keep.scale;
+    s.upgrades = freshUpgrades();
+    s.jobs = [];
+    s.pacts = [];
+    s.rack = [];
+    s.auto = false;
+    s.heat = 0;
+    s.foldFrac = 0;
+    s.prestige = Math.min(MAX_PRESTIGE, s.prestige + 1);
+    s.run = { bestTier: 0, legendRetires: 0 };
+    s.runStart = ctx.now || 0;
+    journal(s, "The forge was rekindled. Prestige " + roman(s.prestige), ctx.now);
+    emit(ctx, { type: "prestige", level: s.prestige, score: computeScore(s), scoreBefore: scoreBefore, durationMs: duration });
+    return { ok: true, level: s.prestige };
+  }
+  function refreshMarket(s, now, ctx) {
+    if (typeof now !== "number" || !isFinite(now)) return false;
+    if (!(typeof s.market.nextAt === "number" && isFinite(s.market.nextAt))) s.market.nextAt = now + MARKET_INTERVAL;
+    if (s.market.nextAt > now + MARKET_INTERVAL) s.market.nextAt = now + MARKET_INTERVAL;
+    if (now < s.market.nextAt) return false;
+    s.market.stock = { spirit: MARKET_STOCK.spirit, silk: MARKET_STOCK.silk, scale: MARKET_STOCK.scale };
+    s.market.nextAt += Math.ceil((now - s.market.nextAt + 1) / MARKET_INTERVAL) * MARKET_INTERVAL;
+    journal(s, "The night market restocked", now);
+    emit(ctx, { type: "restocked" });
+    return true;
+  }
+  /* Catalogue metals from another Rokumon game. times is the caller's list of
+     recent grant timestamps, used for the rate limit. */
+  function grantMaterial(s, material, amount, source, ctx, times) {
+    var key = String(material === undefined || material === null ? "" : material).toLowerCase().trim();
+    var id = own(MAT_ALIAS, key) ? MAT_ALIAS[key] : null;
+    if (!id) return { ok: false, error: "unknown material" };
+    var n = Math.floor(Number(amount));
+    if (!isFinite(n) || n <= 0) return { ok: false, error: "bad amount" };
+    n = Math.min(GRANT_MAX, n);
+    var now = ctx.now;
+    if (times) {
+      for (var i = times.length - 1; i >= 0; i--) if (!(now - times[i] < 60000 && now - times[i] >= 0)) times.splice(i, 1);
+      if (times.length >= GRANT_PER_MINUTE) return { ok: false, error: "rate limited" };
+      times.push(now);
+    }
+    var src = String(source === undefined || source === null ? "courier" : source).replace(/[^\w .\-:]/g, "").slice(0, 80) || "courier";
+    addMat(s, id, n);
+    journal(s, "Courier (" + src + "): " + n + " " + MAT_NAME[id], now);
+    emit(ctx, { type: "granted", material: id, amount: n, source: src });
+    return { ok: true, material: id, amount: n, source: src };
+  }
+
+  // ---------- number formatting ----------
+
+  var SUFFIX = [[1e12, "t"], [1e9, "b"], [1e6, "m"], [1e3, "k"]];
+  function fmt(n) {
+    n = Number(n);
+    if (!isFinite(n) || n < 0) n = 0;
+    if (n < 100) {
+      var s = (Math.floor(n * 10) / 10).toFixed(1);
+      return s.slice(-2) === ".0" ? s.slice(0, -2) : s;
+    }
+    if (n < 10000) return Math.floor(n).toLocaleString("en-GB");
+    if (n >= 1e15) return n.toExponential(2).replace("e+", "e");
+    for (var i = 0; i < SUFFIX.length; i++) {
+      var d = SUFFIX[i][0];
+      if (n >= d) {
+        var v = n / d;
+        var digits = v < 10 ? 2 : (v < 100 ? 1 : 0);
+        var f = Math.pow(10, digits);
+        return (Math.floor(v * f) / f).toFixed(digits) + SUFFIX[i][1];
+      }
+    }
+    return String(Math.floor(n));
+  }
+  function fmtInt(n) {
+    n = Number(n);
+    if (!isFinite(n) || n < 0) n = 0;
+    if (n >= 1e9) return fmt(n);
+    return Math.floor(n).toLocaleString("en-GB");
+  }
+  function fmtRate(n) {
+    n = Number(n);
+    if (!isFinite(n) || n < 0.005) return "+0/s";
+    if (n < 10) return "+" + n.toFixed(2) + "/s";
+    if (n < 1000) return "+" + n.toFixed(1) + "/s";
+    return "+" + fmt(n) + "/s";
+  }
+  function fmtDur(sec) {
+    sec = Number(sec);
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    sec = Math.floor(sec);
+    var h = Math.floor(sec / 3600);
+    var m = Math.floor((sec % 3600) / 60);
+    var r = sec % 60;
+    if (h) return h + "h " + m + "m";
+    if (m) return m + "m " + r + "s";
+    return r + "s";
+  }
+
+  root.RokumonForgeLogic = {
+    SAVE_KEY: SAVE_KEY, BACKUP_KEY: BACKUP_KEY, SAVE_VERSION: SAVE_VERSION,
+    OFFLINE_MIN_GAP: OFFLINE_MIN_GAP, MARKET_INTERVAL: MARKET_INTERVAL, MAX_AMOUNT: MAX_AMOUNT,
+    RACK_SIZE: RACK_SIZE, GRANT_MAX: GRANT_MAX, GRANT_PER_MINUTE: GRANT_PER_MINUTE,
+    FOLD: FOLD, Q_ORDER: Q_ORDER, Q_RANK: Q_RANK, Q_NAME: Q_NAME, Q_MULT: Q_MULT, Q_MASTERY: Q_MASTERY,
+    MATS: MATS, MAT_NAME: MAT_NAME, MAT_ALIAS: MAT_ALIAS, UPGRADES: UPGRADES, WEAPONS: WEAPONS,
+    PACTS: PACTS, MARKET: MARKET, MARKET_STOCK: MARKET_STOCK, TABS: TABS,
+    weaponById: weaponById, upgradeById: upgradeById, pactById: pactById, marketById: marketById,
+    defaultState: defaultState, sanitize: sanitize, serialize: serialize, parseSave: parseSave,
+    have: have, canAfford: canAfford, shortfall: shortfall, upgradeCost: upgradeCost,
+    slots: slots, globalMult: globalMult, masteryBonus: masteryBonus, rates: rates,
+    forgeSpeed: forgeSpeed, offlineSpeed: offlineSpeed, heatDecay: heatDecay, skillBonus: skillBonus,
+    offlineCapSeconds: offlineCapSeconds, offlineEff: offlineEff, pactSlots: pactSlots, pactDuration: pactDuration,
+    foldsAvailable: foldsAvailable, tier4Forged: tier4Forged, pactOpen: pactOpen, needMet: needMet,
+    qualityFromRoll: qualityFromRoll, rollQuality: rollQuality, quenchValue: quenchValue, masteryGain: masteryGain,
+    computeScore: computeScore, canPrestige: canPrestige, outlook: outlook, nextWeapon: nextWeapon,
+    makeCtx: makeCtx, step: step, simulate: simulate, wallGap: wallGap, markTime: markTime,
+    offlinePlan: offlinePlan, runOffline: runOffline,
+    startForge: startForge, tryFill: tryFill, setAuto: setAuto, togglePin: togglePin, startPact: startPact,
+    fold: fold, strike: strike, buyUpgrade: buyUpgrade, buyMarket: buyMarket, retire: retire, retireAll: retireAll,
+    prestige: prestige, refreshMarket: refreshMarket, grantMaterial: grantMaterial,
+    fmt: fmt, fmtInt: fmtInt, fmtRate: fmtRate, fmtDur: fmtDur, roman: roman
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+<script id="game">
+(function () {
+  "use strict";
+  var L = window.RokumonForgeLogic;
+
+  // Platform bridge. The hub serves /hub-bridge.js; when it is missing (a direct
+  // open, a folder, a test) this stand-in speaks the same protocol to a parent
+  // frame, or does nothing at all when there is no parent.
+  if (!window.Hub) {
+    var embedded = window.parent !== window;
+    var send = function (payload) {
+      if (!embedded) return;
+      try { window.parent.postMessage(payload, window.location.origin); } catch (e) {}
+    };
+    window.Hub = {
+      version: 1,
+      embedded: embedded,
+      ready: function () { send({ type: "hub:ready", version: 1 }); },
+      score: function (score) {
+        if (typeof score !== "number" || !isFinite(score)) return;
+        send({ type: "hub:score", score: score });
+      },
+      gameOver: function (score, durationMs) {
+        if (typeof score !== "number" || !isFinite(score)) return;
+        send({ type: "hub:gameover", score: score, durationMs: durationMs });
+      },
+      progress: function (key, value) { send({ type: "hub:progress", key: key, value: value }); },
+      achievement: function (id) { send({ type: "hub:achievement", id: id }); },
+      event: function (name, data) {
+        if (typeof name !== "string" || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name)) return;
+        if (!data || typeof data !== "object" || Array.isArray(data)) return;
+        send({ type: "hub:event", version: 1, name: name, data: data });
+      }
+    };
+  }
+
+  var MATS = L.MATS, WEAPONS = L.WEAPONS, UPGRADES = L.UPGRADES, PACTS = L.PACTS, MARKET = L.MARKET;
+  var weaponById = L.weaponById, upgradeById = L.upgradeById;
+  var MAT_NAME = L.MAT_NAME, Q_NAME = L.Q_NAME;
+  var fmt = L.fmt, fmtInt = L.fmtInt, fmtRate = L.fmtRate, fmtDur = L.fmtDur, roman = L.roman;
 
   var SIL = {
     tanto: '<path d="M34 10c2 12 1 24-1 34 3 1 5 4 4 8h-8c0-4 2-7 5-8-1-10 0-22 0-34z"/>',
@@ -471,7 +1282,6 @@
     rapier: '<path d="M31 2h2v40h-2z"/><path d="M20 40h24v3H20z"/><circle class="line" cx="32" cy="52" r="7"/><path d="M30 46h4v14h-4z"/>',
     claymore: '<path d="M29 8h6v38h-6z"/><path d="M12 16h40v7H12z"/><path d="M27 46h10v10h-10z"/><path d="M26 3h12l-2 7H28z"/>'
   };
-
   var ICONS = {
     satetsu: '<circle cx="4" cy="12" r="2"/><circle cx="9" cy="7" r="2"/><circle cx="12" cy="13" r="1.5"/>',
     sumi: '<path d="M8 1.5l5 4.5-2 8H5L3 6z"/>',
@@ -483,253 +1293,70 @@
     scale: '<path d="M3 8l5-6 5 6-5 6z"/>'
   };
 
-  var weaponById = {};
-  WEAPONS.forEach(function (w) { weaponById[w.id] = w; });
-  var upgradeById = {};
-  UPGRADES.forEach(function (u) { upgradeById[u.id] = u; });
-
-  function freshMats() {
-    var o = {};
-    MATS.forEach(function (m) { o[m.id] = 0; });
-    return o;
-  }
-  function freshUpgrades() {
-    return { bellows: 0, lacquer: 0, wheel: 0, folder: 0, apprentices: 0, water: 0, heart: 0, bell: 0 };
-  }
-  function defaultState() {
-    return {
-      v: 1,
-      mats: freshMats(),
-      upgrades: freshUpgrades(),
-      forged: {},
-      best: {},
-      retired: {},
-      rack: [],
-      jobs: [],
-      pacts: [],
-      market: { nextAt: Date.now() + 8 * 60 * 1000, stock: { spirit: 2, silk: 2, scale: 1 } },
-      prestige: 0,
-      mastery: 0,
-      lifetimeValue: 0,
-      highestTier: 0,
-      pinned: "tanto",
-      selected: "tanto",
-      auto: false,
-      tab: "arms",
-      welcomed: false,
-      mute: false,
-      runStart: Date.now(),
-      lastTick: Date.now(),
-      journal: [],
-      stats: { forgedTotal: 0, strikes: 0, pactsDone: 0, retiredTotal: 0 },
-      run: { bestTier: 0, legendRetires: 0 },
-      uid: 1,
-      foldFrac: 0
-    };
-  }
-
-  var state = defaultState();
+  var state = L.defaultState(Date.now());
   var dirty = true;
   var muted = false;
-  var activeOffline = false;
-  var activeReport = null;
   var lastScore = -1;
   var lastStrike = 0;
   var audioCtx = null;
   var toastTimer = 0;
+  var announceTimer = 0;
   var grantTimes = [];
-  var panelScroll = 0;
+  var modalReturnFocus = null;
+  var reduceMotionQuery = window.matchMedia ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
 
+  function reduceMotion() { return !!(reduceMotionQuery && reduceMotionQuery.matches); }
+  function $(id) { return document.getElementById(id); }
   function esc(s) {
     return String(s)
-      .replace(/&/g, "\u0026amp;")
-      .replace(/</g, "\u0026lt;")
-      .replace(/>/g, "\u0026gt;")
-      .replace(/"/g, "\u0026quot;")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
   }
-  function fmt(n) {
-    n = Math.max(0, Number(n) || 0);
-    if (n < 100) {
-      var s = n.toFixed(1);
-      return s.endsWith(".0") ? s.slice(0, -2) : s;
-    }
-    if (n < 10000) return Math.floor(n).toLocaleString("en-GB");
-    if (n < 1e6) return (n / 1000).toFixed(n < 100000 ? 1 : 0) + "k";
-    return (n / 1e6).toFixed(2) + "m";
-  }
-  function fmtInt(n) { return Math.floor(Math.max(0, n || 0)).toLocaleString("en-GB"); }
-  function fmtRate(n) {
-    if (n < 0.005) return "+0/s";
-    if (n < 10) return "+" + n.toFixed(2) + "/s";
-    return "+" + n.toFixed(1) + "/s";
-  }
-  function fmtDur(sec) {
-    sec = Math.max(0, Math.floor(sec));
-    var h = Math.floor(sec / 3600);
-    var m = Math.floor((sec % 3600) / 60);
-    var s = sec % 60;
-    if (h) return h + "h " + m + "m";
-    if (m) return m + "m " + s + "s";
-    return s + "s";
-  }
-  function roman(n) {
-    var map = [[10, "X"], [9, "IX"], [5, "V"], [4, "IV"], [1, "I"]];
-    var out = "";
-    n = Math.max(0, Math.floor(n));
-    if (!n) return "—";
-    map.forEach(function (pair) {
-      while (n >= pair[0]) { out += pair[1]; n -= pair[0]; }
-    });
-    return out;
-  }
-  function have(id) { return state.mats[id] || 0; }
-  function canAfford(cost) {
-    for (var k in cost) if (have(k) + 1e-6 < cost[k]) return false;
-    return true;
-  }
-  function pay(cost) {
-    for (var k in cost) {
-      state.mats[k] -= cost[k];
-      if (state.mats[k] < 0.0001) state.mats[k] = 0;
-    }
-  }
-  function shortfall(cost) {
-    for (var k in cost) {
-      var need = cost[k] - have(k);
-      if (need > 0.05) return Math.ceil(need) + " " + MAT_NAME[k];
-    }
-    return "";
-  }
-  function slots() {
-    var n = 1;
-    if (state.upgrades.apprentices >= 4) n++;
-    if (state.upgrades.apprentices >= 8) n++;
-    return n;
-  }
-  function globalMult() {
-    return 1 + state.prestige * 0.15 + Math.min(1, state.mastery * 0.0025);
-  }
-  function rates() {
-    var u = state.upgrades;
-    var m = globalMult();
-    return {
-      satetsu: (0.9 + u.bellows * 0.48) * m,
-      sumi: (0.55 + u.bellows * 0.28) * m,
-      urushi: (0.03 + u.lacquer * 0.065) * m,
-      whetstone: (0.018 + u.wheel * 0.04) * m,
-      tamahagane: u.folder * 0.012 * m
-    };
-  }
-  function forgeSpeed() {
-    return (1 + state.upgrades.water * 0.14) * (1 + Math.min(100, state.heat) / 140);
-  }
-  function offlineSpeed() { return 1 + state.upgrades.water * 0.14; }
-  function heatDecay() { return Math.max(1.2, 5.5 - state.upgrades.heart * 0.18); }
-  function skillBonus(heat) {
-    return state.upgrades.wheel * 2 + state.upgrades.heart * 2.6 + state.prestige * 3.5 + Math.min(100, heat || 0) * 0.1;
-  }
-  function offlineCapSeconds() { return Math.min(12, 4 + state.upgrades.apprentices * 0.8) * 3600; }
-  function offlineEff() { return Math.min(1, 0.35 + state.upgrades.apprentices * 0.07); }
-  function pactSlots() { return 1 + (state.upgrades.bell >= 5 ? 1 : 0); }
-  function pactDuration(p) { return p.seconds / (1 + state.upgrades.bell * 0.12); }
-  function foldsAvailable() {
-    return Math.floor(Math.min(have("satetsu") / FOLD.satetsu, have("sumi") / FOLD.sumi));
-  }
-  function tier4Forged() {
-    return WEAPONS.some(function (w) { return w.tier >= 4 && (state.forged[w.id] || 0) > 0; });
-  }
-  function pactOpen(p) { return p.gate === "tier4" ? tier4Forged() : true; }
-  function needMet(w) {
-    if ((w.prestige || 0) > state.prestige) return { ok: false, why: "Prestige " + roman(w.prestige) };
-    if (w.need) {
-      for (var id in w.need) {
-        if ((state.forged[id] || 0) < w.need[id]) {
-          var name = weaponById[id] ? weaponById[id].name : id;
-          var n = w.need[id];
-          return { ok: false, why: "Forge " + (n > 1 ? n + " " : "a ") + name };
-        }
-      }
-    }
-    return { ok: true };
-  }
-  function rollQuality(heat) {
-    var roll = Math.random() * 100 + skillBonus(heat);
-    if (roll >= 112) return "legendary";
-    if (roll >= 90) return "masterwork";
-    if (roll >= 68) return "fine";
-    if (roll >= 38) return "serviceable";
-    return "crude";
-  }
-  function masteryGain(item) {
-    if ((Q_RANK[item.quality] || 0) < 1) return 0;
-    var w = weaponById[item.id];
-    if (!w) return 0;
-    return (Q_MASTERY[item.quality] || 0) + Math.floor(w.tier / 2);
-  }
-  function computeScore() {
-    return Math.floor(state.lifetimeValue + state.prestige * 1000 + state.highestTier * 25 + state.mastery * 15);
-  }
-  function canPrestige() {
-    return (state.run.bestTier || 0) >= 6 || (state.run.legendRetires || 0) > 0;
-  }
-  function outlook() {
-    var s = skillBonus(state.heat);
-    if (s >= 36) return "The quench can reach legendary.";
-    if (s >= 22) return "Masterwork is a fair hope.";
-    if (s >= 10) return "Fine work is becoming common.";
-    return "Most blades leave serviceable.";
-  }
-  function nextWeapon() {
-    var pinned = state.pinned && weaponById[state.pinned];
-    if (pinned && needMet(pinned).ok) return pinned;
-    var open = WEAPONS.filter(function (w) { return needMet(w).ok; });
-    var fresh = open.filter(function (w) { return !(state.forged[w.id] > 0); });
-    fresh.sort(function (a, b) { return a.tier - b.tier || a.value - b.value; });
-    var i;
-    for (i = 0; i < fresh.length; i++) if (canAfford(fresh[i].cost)) return fresh[i];
-    if (fresh.length) return fresh[0];
-    var afford = open.filter(function (w) { return canAfford(w.cost); });
-    afford.sort(function (a, b) { return b.tier - a.tier; });
-    if (afford.length) return afford[0];
-    open.sort(function (a, b) { return a.tier - b.tier; });
-    return open[0] || WEAPONS[0];
-  }
+  function ctxNow(offline) { return L.makeCtx({ now: Date.now(), rng: Math.random, offline: !!offline }); }
 
-  function journal(text) {
-    state.journal.unshift({ t: Date.now(), text: text });
-    if (state.journal.length > 18) state.journal.length = 18;
-  }
+  // ---------- feedback: toast (visual), announce (screen readers) ----------
+
   function toast(text) {
-    var el = document.getElementById("toast");
+    var el = $("toast");
     el.textContent = text;
     el.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { el.classList.remove("show"); }, 2200);
   }
+  // Purchases, unlocks and failures are announced. Production ticks never are.
+  function announce(text) {
+    var el = $("announce");
+    clearTimeout(announceTimer);
+    el.textContent = "";
+    announceTimer = setTimeout(function () { el.textContent = text; }, 40);
+  }
+  function tell(text) { toast(text); announce(text); }
+
   function hubEvent(name, data) {
     if (!window.Hub || typeof window.Hub.event !== "function") return;
     try { window.Hub.event(name, data); } catch (e) {}
   }
   function reportScore(force) {
     if (!window.Hub || typeof window.Hub.score !== "function") return;
-    var s = computeScore();
+    var s = L.computeScore(state);
     if (!force && s === lastScore) return;
     lastScore = s;
     try { window.Hub.score(s); } catch (e) {}
   }
-  function hubReady() {
-    if (!window.Hub || typeof window.Hub.ready !== "function") return;
-    try { window.Hub.ready(); } catch (e) {}
-    reportScore(true);
-  }
+
+  // ---------- sound (Web Audio, nothing fetched, silent when muted) ----------
 
   function ac() {
     if (muted) return null;
     var AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return null;
-    if (!audioCtx) audioCtx = new AC();
-    if (audioCtx.state === "suspended") audioCtx.resume();
+    try {
+      if (!audioCtx) audioCtx = new AC();
+      if (audioCtx.state === "suspended") audioCtx.resume();
+    } catch (e) { return null; }
     return audioCtx;
   }
   function tone(freq, t, dur, type, gain) {
@@ -785,7 +1412,8 @@
     tone(440, t + 0.28, 0.5, "triangle", 0.035);
   }
   function sparks() {
-    var host = document.getElementById("sparks");
+    if (reduceMotion()) return;
+    var host = $("sparks");
     if (!host || host.childElementCount > 24) return;
     for (var i = 0; i < 6; i++) {
       var s = document.createElement("i");
@@ -798,8 +1426,9 @@
     }
   }
   function swing() {
-    var h = document.getElementById("hammer");
-    var hearth = document.getElementById("hearth");
+    if (reduceMotion()) return;
+    var h = $("hammer");
+    var hearth = $("hearth");
     h.classList.remove("swing");
     hearth.classList.remove("thump");
     void h.offsetWidth;
@@ -807,381 +1436,113 @@
     hearth.classList.add("thump");
   }
 
+  // ---------- events from the rules ----------
+
+  function handle(ctx) {
+    if (!ctx.events.length) return;
+    dirty = true;
+    if (ctx.offline) return; // offline work is summarised once, not replayed
+    ctx.events.forEach(function (ev) {
+      var w = ev.id && weaponById[ev.id];
+      if (ev.type === "forged") {
+        var line = w.name + " quenched · " + Q_NAME[ev.quality];
+        if (ev.first) tell("First " + line);
+        else if (ev.auto) toast(line);
+        else tell(line);
+        playForge();
+        hubEvent("weapon-forged", { weaponId: ev.id, tier: ev.tier, quality: ev.quality, value: ev.value });
+        reportScore(false);
+      } else if (ev.type === "forge-started") {
+        if (!ev.auto) { announce("Forging " + w.name); playUpgrade(); }
+      } else if (ev.type === "pact") {
+        tell(MAT_NAME[ev.material] + " arrived");
+        playForge();
+        hubEvent("contract-fulfilled", { contractId: ev.id, material: ev.material, amount: ev.amount });
+      } else if (ev.type === "pact-started") {
+        announce("Runner sent: " + L.pactById[ev.id].name);
+        playUpgrade();
+      } else if (ev.type === "upgraded") {
+        var u = upgradeById[ev.id];
+        if (ev.id === "water" && ev.level === 1) tell("The water wheel can tend a pinned blade");
+        else if (ev.id === "apprentices" && (ev.level === 4 || ev.level === 8)) tell("Another anvil opens");
+        else if (ev.id === "bell" && ev.level === 5) tell("A second runner joins");
+        else announce(u.name + " level " + ev.level);
+        playUpgrade();
+        hubEvent("forge-upgraded", { upgradeId: ev.id, level: ev.level });
+      } else if (ev.type === "traded") {
+        announce("Traded for " + ev.label);
+        playUpgrade();
+      } else if (ev.type === "folded") {
+        announce("Folded " + ev.n + " tamahagane");
+        playUpgrade();
+      } else if (ev.type === "retired") {
+        tell("Mastery +" + ev.gain);
+        playUpgrade();
+        hubEvent("weapon-retired", { weaponId: ev.id, tier: ev.tier, mastery: ev.mastery });
+        reportScore(false);
+      } else if (ev.type === "set-aside") {
+        tell("Crude " + (w ? w.name : "blade") + " set aside");
+      } else if (ev.type === "retired-all") {
+        if (ev.gain > 0) { tell("Mastery +" + ev.gain); playUpgrade(); reportScore(false); }
+        else tell("Nothing on the rack worth retiring");
+      } else if (ev.type === "granted") {
+        tell(MAT_NAME[ev.material] + " +" + ev.amount);
+        hubEvent("material-granted", { material: ev.material, amount: ev.amount, source: ev.source });
+      } else if (ev.type === "prestige") {
+        if (window.Hub && typeof window.Hub.gameOver === "function") {
+          try { window.Hub.gameOver(ev.scoreBefore, ev.durationMs); } catch (e) {}
+        }
+        tell("Prestige " + roman(ev.level) + ". The coals are banked.");
+        playPrestige();
+        hubEvent("prestige", { level: ev.level, score: ev.score });
+        reportScore(true);
+      }
+    });
+  }
+  // Run a player action, report a refusal, persist a success.
+  function act(fn) {
+    var ctx = ctxNow(false);
+    var res = fn(ctx);
+    handle(ctx);
+    if (res && res.ok === false && res.reason) tell(res.reason);
+    if (res && res.ok) { dirty = true; save(); }
+    return res;
+  }
+
+  // ---------- save ----------
+
+  function storage() {
+    try { return window.localStorage; } catch (e) { return null; }
+  }
   function save() {
-    state.lastTick = Date.now();
     state.mute = muted;
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify(state)); } catch (e) {}
+    var ls = storage();
+    if (!ls) return;
+    try { ls.setItem(L.SAVE_KEY, L.serialize(state)); } catch (e) {}
   }
   function load() {
-    try {
-      var raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return;
-      var data = JSON.parse(raw);
-      if (!data || data.v !== 1) return;
-      var base = defaultState();
-      state = Object.assign(base, data);
-      state.mats = Object.assign(freshMats(), data.mats || {});
-      state.upgrades = Object.assign(freshUpgrades(), data.upgrades || {});
-      state.stats = Object.assign(base.stats, data.stats || {});
-      state.run = Object.assign(base.run, data.run || {});
-      state.market = Object.assign(base.market, data.market || {});
-      state.market.stock = Object.assign({ spirit: 2, silk: 2, scale: 1 }, (data.market && data.market.stock) || {});
-      state.jobs = (data.jobs || []).filter(function (j) {
-        return j && weaponById[j.id] && typeof j.progress === "number";
-      });
-      state.pacts = (data.pacts || []).filter(function (p) {
-        return p && PACTS.some(function (d) { return d.id === p.id; });
-      });
-      state.rack = (data.rack || []).filter(function (r) { return r && weaponById[r.id]; });
-      state.journal = Array.isArray(data.journal) ? data.journal.slice(0, 18) : [];
-      state.forged = data.forged || {};
-      state.best = data.best || {};
-      state.retired = data.retired || {};
-      if (!weaponById[state.selected]) state.selected = "tanto";
-      if (state.pinned && !weaponById[state.pinned]) state.pinned = null;
-      if (["arms", "workshop", "metals", "ledger"].indexOf(state.tab) < 0) state.tab = "arms";
-      MATS.forEach(function (m) {
-        if (typeof state.mats[m.id] !== "number" || !isFinite(state.mats[m.id]) || state.mats[m.id] < 0) state.mats[m.id] = 0;
-      });
-      muted = !!state.mute;
-    } catch (e) {
-      state = defaultState();
+    var ls = storage();
+    var raw = null;
+    if (ls) { try { raw = ls.getItem(L.SAVE_KEY); } catch (e) { raw = null; } }
+    var out = L.parseSave(raw, Date.now());
+    if (out.status === "reset" && ls) {
+      // Keep the unreadable text aside rather than destroying it.
+      try { ls.setItem(L.BACKUP_KEY, String(raw).slice(0, 500000)); } catch (e) {}
     }
+    state = out.state;
+    muted = !!state.mute;
+    return out;
   }
 
-  function produce(dt) {
-    var r = rates();
-    state.mats.satetsu += r.satetsu * dt;
-    state.mats.sumi += r.sumi * dt;
-    state.mats.urushi += r.urushi * dt;
-    state.mats.whetstone += r.whetstone * dt;
-    state.foldFrac += r.tamahagane * dt;
-    var n = Math.floor(state.foldFrac);
-    if (n > 0) {
-      var can = Math.min(n, Math.floor(have("satetsu") / FOLD.satetsu), Math.floor(have("sumi") / FOLD.sumi));
-      if (can > 0) {
-        state.mats.satetsu -= can * FOLD.satetsu;
-        state.mats.sumi -= can * FOLD.sumi;
-        state.mats.tamahagane += can;
-        state.foldFrac -= can;
-        if (activeReport) activeReport.folded += can;
-      } else {
-        state.foldFrac = Math.min(state.foldFrac, 1);
-      }
-    }
-  }
-  function resolveJobs() {
-    var done = state.jobs.filter(function (j) { return j.progress >= j.time - 1e-6; });
-    if (!done.length) return;
-    state.jobs = state.jobs.filter(function (j) { return j.progress < j.time - 1e-6; });
-    done.forEach(completeJob);
-    tryFill();
-    dirty = true;
-  }
-  function advanceJobs(dt) {
-    if (!state.jobs.length) return;
-    var speed = activeOffline ? offlineSpeed() : forgeSpeed();
-    state.jobs.forEach(function (j) { j.progress += dt * speed; });
-    resolveJobs();
-  }
-  function advancePacts(dt) {
-    if (!state.pacts.length) return;
-    state.pacts.forEach(function (p) { p.remaining -= dt; });
-    var done = state.pacts.filter(function (p) { return p.remaining <= 0; });
-    if (!done.length) return;
-    state.pacts = state.pacts.filter(function (p) { return p.remaining > 0; });
-    done.forEach(finishPact);
-    dirty = true;
-  }
-  function step(dt) {
-    if (!activeOffline) state.heat = Math.max(0, state.heat - heatDecay() * dt);
-    produce(dt);
-    advanceJobs(dt);
-    advancePacts(dt);
-  }
-  function simulate(seconds, offline) {
-    var report = { forged: {}, folded: 0 };
-    var prevOff = activeOffline;
-    var prevRep = activeReport;
-    activeOffline = !!offline;
-    activeReport = offline ? report : null;
-    var steps = Math.max(1, Math.ceil(seconds / 0.25));
-    if (steps > 80000) steps = 80000;
-    var dt = seconds / steps;
-    for (var i = 0; i < steps; i++) step(dt);
-    activeOffline = prevOff;
-    activeReport = prevRep;
-    return report;
-  }
+  // ---------- render ----------
 
-  function completeJob(job) {
-    var w = weaponById[job.id];
-    if (!w) return;
-    var quality = rollQuality(activeOffline ? 0 : state.heat);
-    var value = Math.max(1, Math.round(w.value * Q_MULT[quality] * (1 + state.prestige * 0.05)));
-    state.forged[w.id] = (state.forged[w.id] || 0) + 1;
-    if ((Q_RANK[quality] || 0) >= (Q_RANK[state.best[w.id]] != null ? Q_RANK[state.best[w.id]] : -1)) state.best[w.id] = quality;
-    if (w.tier > state.highestTier) state.highestTier = w.tier;
-    if (w.tier > (state.run.bestTier || 0)) state.run.bestTier = w.tier;
-    state.lifetimeValue += value;
-    state.stats.forgedTotal++;
-    state.rack.push({ uid: ++state.uid, id: w.id, quality: quality, value: value, at: Date.now() });
-    while (state.rack.length > 40) state.rack.shift();
-    if (activeReport) activeReport.forged[w.id] = (activeReport.forged[w.id] || 0) + 1;
-    if (!activeOffline) {
-      journal(Q_NAME[quality] + " " + w.name + " quenched (" + fmtInt(value) + ")");
-      toast(w.name + " quenched · " + Q_NAME[quality]);
-      playForge();
-      hubEvent("weapon-forged", { weaponId: w.id, tier: w.tier, quality: quality, value: value });
-      reportScore(false);
-    }
+  // Action buttons that cannot act right now stay focusable (aria-disabled), so
+  // a purchase never drops keyboard focus, and pressing one says why.
+  function off(isOff) { return ' aria-disabled="' + (isOff ? "true" : "false") + '"'; }
+  function setOff(btn, isOff) {
+    var v = isOff ? "true" : "false";
+    if (btn.getAttribute("aria-disabled") !== v) btn.setAttribute("aria-disabled", v);
   }
-  function tryFill() {
-    if (!state.auto || state.upgrades.water < 1 || !state.pinned) return;
-    var w = weaponById[state.pinned];
-    if (!w) return;
-    var guard = 0;
-    while (state.jobs.length < slots() && guard++ < 8) {
-      if (!needMet(w).ok || !canAfford(w.cost)) break;
-      var before = state.jobs.length;
-      startForge(w.id);
-      if (state.jobs.length === before) break;
-    }
-  }
-  function startForge(id) {
-    var w = weaponById[id];
-    if (!w) return;
-    var gate = needMet(w);
-    if (!gate.ok) { if (!activeOffline) toast(gate.why); return; }
-    if (state.jobs.length >= slots()) { if (!activeOffline) toast("The anvil is occupied"); return; }
-    if (!canAfford(w.cost)) { if (!activeOffline) toast("Short on materials"); return; }
-    pay(w.cost);
-    state.jobs.push({ id: w.id, progress: 0, time: w.time, uid: ++state.uid });
-    if (!activeOffline) {
-      playUpgrade();
-      dirty = true;
-      save();
-    }
-  }
-  function finishPact(p) {
-    var def = null;
-    PACTS.forEach(function (d) { if (d.id === p.id) def = d; });
-    if (!def) return;
-    var mat = Object.keys(def.gain)[0];
-    var amount = def.gain[mat];
-    state.mats[mat] += amount;
-    state.stats.pactsDone++;
-    if (!activeOffline) {
-      journal(def.name + " returned with " + MAT_NAME[mat]);
-      toast(MAT_NAME[mat] + " arrived");
-      playForge();
-      hubEvent("contract-fulfilled", { contractId: p.id, material: mat, amount: amount });
-    }
-  }
-  function startPact(id) {
-    var def = null;
-    PACTS.forEach(function (d) { if (d.id === id) def = d; });
-    if (!def || !pactOpen(def)) return;
-    if (state.pacts.some(function (p) { return p.id === id; })) { toast("Already on the road"); return; }
-    if (state.pacts.length >= pactSlots()) { toast("Every runner is already out"); return; }
-    var dur = pactDuration(def);
-    state.pacts.push({ id: id, remaining: dur, total: dur });
-    playUpgrade();
-    dirty = true;
-    save();
-  }
-  function fold(n) {
-    var can = Math.min(n, foldsAvailable());
-    if (can <= 0) { toast("Need 36 satetsu and 22 sumi"); return; }
-    state.mats.satetsu -= can * FOLD.satetsu;
-    state.mats.sumi -= can * FOLD.sumi;
-    state.mats.tamahagane += can;
-    if (can >= 5) journal("Folded " + can + " tamahagane");
-    playUpgrade();
-    dirty = true;
-  }
-  function strike() {
-    var now = performance.now();
-    if (now - lastStrike < 150) return;
-    lastStrike = now;
-    ac();
-    state.stats.strikes++;
-    state.heat = Math.min(100, state.heat + 13);
-    if (state.jobs.length) {
-      var job = state.jobs.slice().sort(function (a, b) { return (b.progress / b.time) - (a.progress / a.time); })[0];
-      job.progress += 0.55 * forgeSpeed();
-      resolveJobs();
-    } else if (state.mats.satetsu < 400) {
-      var damp = state.mats.satetsu > 180 ? 0.35 : 1;
-      state.mats.satetsu += 1.05 * damp;
-      state.mats.sumi += 0.6 * damp;
-    }
-    swing();
-    sparks();
-    playStrike();
-  }
-  function buy(id) {
-    var u = upgradeById[id];
-    if (!u) return;
-    var lv = state.upgrades[id] || 0;
-    if (lv >= u.max) return;
-    var cost = u.cost(lv);
-    if (!canAfford(cost)) { toast("Short on materials"); return; }
-    pay(cost);
-    state.upgrades[id] = lv + 1;
-    if (id === "water" && state.upgrades.water === 1) toast("The water wheel can tend a pinned blade");
-    journal(u.name + " " + state.upgrades[id]);
-    playUpgrade();
-    hubEvent("forge-upgraded", { upgradeId: id, level: state.upgrades[id] });
-    dirty = true;
-    save();
-  }
-  function buyMarket(id) {
-    var offer = null;
-    MARKET.forEach(function (m) { if (m.id === id) offer = m; });
-    if (!offer) return;
-    if ((state.market.stock[offer.stockKey] || 0) <= 0) { toast("Sold for this watch"); return; }
-    if (!canAfford(offer.cost)) { toast("Short on materials"); return; }
-    pay(offer.cost);
-    for (var k in offer.gain) state.mats[k] += offer.gain[k];
-    state.market.stock[offer.stockKey]--;
-    journal("Night market: " + offer.label);
-    playUpgrade();
-    dirty = true;
-    save();
-  }
-  function retireUid(uid, silent) {
-    var index = -1;
-    for (var i = 0; i < state.rack.length; i++) if (state.rack[i].uid === uid) index = i;
-    if (index < 0) return 0;
-    var item = state.rack[index];
-    var w = weaponById[item.id];
-    var gain = masteryGain(item);
-    state.rack.splice(index, 1);
-    if (gain > 0) {
-      state.mastery += gain;
-      state.retired[item.id] = (state.retired[item.id] || 0) + 1;
-      state.stats.retiredTotal++;
-      if (item.quality === "legendary" && w && w.tier >= 5) state.run.legendRetires = (state.run.legendRetires || 0) + 1;
-      if (!silent) {
-        journal("Retired " + Q_NAME[item.quality] + " " + w.name + " (+" + gain + " mastery)");
-        toast("Mastery +" + gain);
-        playUpgrade();
-        hubEvent("weapon-retired", { weaponId: item.id, tier: w.tier, mastery: state.mastery });
-        reportScore(false);
-      }
-    } else if (!silent) {
-      toast("Crude " + (w ? w.name : "blade") + " set aside");
-    }
-    if (!silent) { dirty = true; save(); }
-    return gain;
-  }
-  function retireAll(silent) {
-    var ids = state.rack.map(function (r) { return r.uid; });
-    var total = 0;
-    ids.forEach(function (uid) { total += retireUid(uid, true); });
-    if (!silent) {
-      if (total > 0) {
-        journal("Rack retired for " + total + " mastery");
-        toast("Mastery +" + total);
-        playUpgrade();
-        reportScore(false);
-      } else toast("Nothing on the rack worth retiring");
-      dirty = true;
-      save();
-    }
-    return total;
-  }
-  function doPrestige() {
-    if (!canPrestige()) { toast("This firing has not earned a rekindle"); return; }
-    var score = computeScore();
-    var dur = Math.max(0, Date.now() - (state.runStart || Date.now()));
-    if (window.Hub && typeof window.Hub.gameOver === "function") {
-      try { window.Hub.gameOver(score, dur); } catch (e) {}
-    }
-    retireAll(true);
-    var keepSpirit = state.mats.spirit;
-    var keepSilk = state.mats.silk;
-    var keepScale = state.mats.scale;
-    state.mats = freshMats();
-    state.mats.spirit = keepSpirit;
-    state.mats.silk = keepSilk;
-    state.mats.scale = keepScale;
-    state.upgrades = freshUpgrades();
-    state.jobs = [];
-    state.pacts = [];
-    state.rack = [];
-    state.auto = false;
-    state.heat = 0;
-    state.foldFrac = 0;
-    state.prestige += 1;
-    state.run = { bestTier: 0, legendRetires: 0 };
-    state.runStart = Date.now();
-    journal("The forge was rekindled. Prestige " + roman(state.prestige));
-    toast("Prestige " + roman(state.prestige) + ". The coals are banked.");
-    playPrestige();
-    hubEvent("prestige", { level: state.prestige, score: computeScore() });
-    reportScore(true);
-    dirty = true;
-    save();
-    closeModal();
-  }
-  function refreshMarket() {
-    var interval = 8 * 60 * 1000;
-    if (!state.market.nextAt || !isFinite(state.market.nextAt)) state.market.nextAt = Date.now() + interval;
-    if (Date.now() < state.market.nextAt) return;
-    state.market.stock = { spirit: 2, silk: 2, scale: 1 };
-    var guard = 0;
-    while (state.market.nextAt <= Date.now() && guard++ < 1000) state.market.nextAt += interval;
-    journal("The night market restocked");
-    dirty = true;
-  }
-  function runOffline(gap) {
-    var cap = offlineCapSeconds();
-    var counted = Math.min(gap, cap);
-    var before = Object.assign({}, state.mats);
-    var report = simulate(counted * offlineEff(), true);
-    report.away = gap;
-    report.counted = counted;
-    report.eff = offlineEff();
-    report.capped = gap > cap + 5;
-    report.gained = {};
-    MATS.forEach(function (m) {
-      var d = state.mats[m.id] - (before[m.id] || 0);
-      if (d > 0.5) report.gained[m.id] = d;
-    });
-    var blades = 0;
-    Object.keys(report.forged).forEach(function (id) { blades += report.forged[id]; });
-    if (blades || Object.keys(report.gained).length) {
-      var bits = [];
-      if (blades) bits.push(blades + " blade" + (blades === 1 ? "" : "s"));
-      journal("While you were away: " + (bits.join(", ") || "the coals held"));
-      hubEvent("offline-return", { seconds: Math.floor(counted), forged: blades });
-      reportScore(false);
-    }
-    return report;
-  }
-  function grantMaterial(material, amount, source) {
-    var key = String(material || "").toLowerCase().trim();
-    var id = MAT_ALIAS[key];
-    if (!id) return { ok: false, error: "unknown material" };
-    var n = Math.floor(Number(amount));
-    if (!isFinite(n) || n <= 0) return { ok: false, error: "bad amount" };
-    n = Math.min(25, n);
-    var now = Date.now();
-    grantTimes = grantTimes.filter(function (t) { return now - t < 60000; });
-    if (grantTimes.length >= 12) return { ok: false, error: "rate limited" };
-    grantTimes.push(now);
-    var src = String(source || "courier").replace(/[^\w .\-:]/g, "").slice(0, 80) || "courier";
-    state.mats[id] += n;
-    journal("Courier (" + src + "): " + n + " " + MAT_NAME[id]);
-    toast(MAT_NAME[id] + " +" + n);
-    hubEvent("material-granted", { material: id, amount: n, source: src });
-    dirty = true;
-    save();
-    return { ok: true, material: id, amount: n, source: src };
-  }
-
   function icon(id) {
     return '<svg viewBox="0 0 16 16" class="ico" aria-hidden="true">' + (ICONS[id] || "") + "</svg>";
   }
@@ -1190,17 +1551,17 @@
   }
   function costHtml(cost) {
     return Object.keys(cost).map(function (k) {
-      var ok = have(k) + 1e-6 >= cost[k];
+      var ok = L.have(state, k) + 1e-6 >= cost[k];
       return '<span class="cost ' + (ok ? "ok" : "short") + '" data-cost-mat="' + k + '" data-cost-need="' + cost[k] + '">' + esc(MAT_NAME[k]) + " " + fmtInt(cost[k]) + "</span>";
     }).join("");
   }
   function renderResources() {
-    document.getElementById("resources").innerHTML = MATS.map(function (m) {
+    $("resources").innerHTML = MATS.map(function (m) {
       return '<div class="res' + (m.rare ? " rare" : "") + '"><div class="top">' + icon(m.id) + '<span class="k">' + esc(m.name) + '</span></div><div class="v" data-amt="' + m.id + '">0</div><div class="r" data-rate="' + m.id + '"></div></div>';
     }).join("");
   }
   function renderJobs() {
-    var el = document.getElementById("jobs");
+    var el = $("jobs");
     if (!state.jobs.length) {
       el.innerHTML = '<p class="idle-copy">The anvil is clear. Choose a blade, or strike to wake the coals.</p>';
       return;
@@ -1212,37 +1573,37 @@
     }).join("");
   }
   function renderGallery() {
-    document.getElementById("gallery").innerHTML = WEAPONS.map(function (w) {
-      var gate = needMet(w);
+    $("gallery").innerHTML = WEAPONS.map(function (w) {
+      var gate = L.needMet(state, w);
       var count = state.forged[w.id] || 0;
       var best = state.best[w.id];
-      return '<button type="button" class="g-card' + (gate.ok ? "" : " locked") + (state.selected === w.id ? " on" : "") + '" data-act="select" data-id="' + w.id + '" title="' + esc(w.name) + '"><span class="g-svg">' + sil(w.id) + '</span><span class="g-name">' + esc(w.name) + "</span>" + (count ? '<span class="g-count">' + count + "</span>" : "") + (best ? '<i class="q q-' + best + '"></i>' : "") + "</button>";
+      var label = w.name + (gate.ok ? "" : ", locked: " + gate.why) + (count ? ", forged " + count : "") + (best ? ", best " + Q_NAME[best] : "");
+      return '<button type="button" class="g-card' + (gate.ok ? "" : " locked") + (state.selected === w.id ? " on" : "") + '" data-act="select" data-id="' + w.id + '" aria-label="' + esc(label) + '"' + (state.selected === w.id ? ' aria-current="true"' : "") + '><span class="g-svg">' + sil(w.id) + '</span><span class="g-name" aria-hidden="true">' + esc(w.name) + "</span>" + (count ? '<span class="g-count" aria-hidden="true">' + count + "</span>" : "") + (best ? '<i class="q q-' + best + '" aria-hidden="true"></i>' : "") + "</button>";
     }).join("");
   }
   function renderArms() {
     var w = weaponById[state.selected] || WEAPONS[0];
-    var gate = needMet(w);
+    var gate = L.needMet(state, w);
     var best = state.best[w.id];
     var pinned = state.pinned === w.id;
     var html = '<label class="check"><input type="checkbox" data-act="auto"' + (state.auto ? " checked" : "") + (state.upgrades.water < 1 ? " disabled" : "") + "> Tend the pinned blade</label>";
     html += '<p class="meta">' + (state.upgrades.water < 1 ? "Build the water wheel to let the forge continue a pinned blade." : "Pins stay on one pattern. The wheel forges it whenever an anvil is free.") + "</p>";
     html += '<article class="detail"><div class="art">' + sil(w.id) + '</div><div><h2>' + esc(w.name) + "</h2>";
-    html += '<div class="kana">Tier ' + w.tier + (w.kana ? " · " + esc(w.kana) : "") + " · " + (w.line === "old" ? "Old steel" : "Outland") + "</div>";
+    html += '<div class="kana">Tier ' + w.tier + (w.kana ? ' · <span lang="ja">' + esc(w.kana) + "</span>" : "") + " · " + (w.line === "old" ? "Old steel" : "Outland") + "</div>";
     html += '<p class="lore">' + esc(w.lore) + "</p>";
     html += '<div class="meta">Forged ' + fmtInt(state.forged[w.id] || 0) + (best ? " · best " + Q_NAME[best] : "") + (pinned ? " · pinned" : "") + "</div>";
     html += '<div class="costs">' + costHtml(w.cost) + "</div>";
-    html += '<p class="meta">' + outlook() + "</p>";
+    html += '<p class="meta">' + L.outlook(state) + "</p>";
     html += '<div class="row-actions">';
     if (!gate.ok) html += '<button type="button" class="btn" disabled>' + esc(gate.why) + "</button>";
-    else if (state.jobs.length >= slots()) html += '<button type="button" class="btn" disabled>Anvil occupied</button>';
-    else html += '<button type="button" class="btn btn-ember" data-act="forge" data-id="' + w.id + '"' + (canAfford(w.cost) ? "" : " disabled") + ">Forge</button>";
-    html += '<button type="button" class="btn btn-gold" data-act="pin" data-id="' + w.id + '">' + (pinned ? "Pinned" : "Pin") + "</button>";
+    else html += '<button type="button" class="btn btn-ember" data-act="forge" data-id="' + w.id + '"' + off(!(state.jobs.length < L.slots(state) && L.canAfford(state, w.cost))) + ">" + (state.jobs.length >= L.slots(state) ? "Anvil occupied" : "Forge " + esc(w.name)) + "</button>";
+    html += '<button type="button" class="btn btn-gold" data-act="pin" data-id="' + w.id + '" aria-pressed="' + (pinned ? "true" : "false") + '">' + (pinned ? "Pinned" : "Pin") + "</button>";
     html += "</div></div></article>";
     ["old", "outland"].forEach(function (line) {
       html += '<div class="group-label">' + (line === "old" ? "Old steel" : "Outland armoury") + "</div><div class=\"grid-cards\">";
       WEAPONS.filter(function (item) { return item.line === line; }).forEach(function (item) {
-        var g = needMet(item);
-        html += '<button type="button" class="w-card' + (state.selected === item.id ? " on" : "") + '" data-act="select" data-id="' + item.id + '">';
+        var g = L.needMet(state, item);
+        html += '<button type="button" class="w-card' + (state.selected === item.id ? " on" : "") + '" data-act="select" data-id="' + item.id + '"' + (state.selected === item.id ? ' aria-current="true"' : "") + ">";
         html += '<div class="nm">' + esc(item.name) + "</div>";
         html += '<div class="meta">Tier ' + item.tier + " · " + (state.forged[item.id] || 0) + " forged" + (g.ok ? "" : " · " + esc(g.why)) + "</div>";
         html += "</button>";
@@ -1256,23 +1617,23 @@
       var lv = state.upgrades[u.id] || 0;
       var maxed = lv >= u.max;
       var cost = maxed ? null : u.cost(lv);
-      return '<article class="u-card"><div class="nm">' + esc(u.name) + "</div><div class=\"meta\">Level " + lv + " / " + u.max + "</div><p class=\"lore\">" + esc(u.blurb) + "</p><p class=\"meta\">" + esc(u.effect) + "</p>" + (cost ? '<div class="costs">' + costHtml(cost) + "</div>" : "") + '<button type="button" class="btn btn-ember" data-act="buy" data-id="' + u.id + '"' + (maxed || !canAfford(cost) ? " disabled" : "") + ">" + (maxed ? "Maxed" : "Improve") + "</button></article>";
+      return '<article class="u-card"><div class="nm">' + esc(u.name) + "</div><div class=\"meta\">Level " + lv + " / " + u.max + "</div><p class=\"lore\">" + esc(u.blurb) + "</p><p class=\"meta\">" + esc(u.effect) + "</p>" + (cost ? '<div class="costs">' + costHtml(cost) + "</div>" : "") + '<button type="button" class="btn btn-ember" data-act="buy" data-id="' + u.id + '" aria-label="' + esc((maxed ? "Maxed: " : "Improve ") + u.name + (maxed ? "" : " to level " + (lv + 1))) + '"' + off(maxed || !L.canAfford(state, cost)) + ">" + (maxed ? "Maxed" : "Improve") + "</button></article>";
     }).join("") + "</div>";
   }
   function renderMetals() {
     var html = "<p class=\"lore\">Spirit iron, moon silk and dragon scale are catalogue metals. On the Rokumon hub they arrive from other games. Until that courier is connected, pacts and the night market stand in. Grants are kept when you rekindle.</p>";
     html += '<div class="grid-cards">';
     PACTS.forEach(function (p) {
-      var open = pactOpen(p);
+      var open = L.pactOpen(state, p);
       var running = state.pacts.filter(function (x) { return x.id === p.id; })[0];
       var mat = Object.keys(p.gain)[0];
-      html += '<article class="p-card"><div class="nm">' + esc(p.name) + "</div><p class=\"lore\">" + esc(p.blurb) + "</p><div class=\"meta\">" + esc(MAT_NAME[mat]) + " · " + fmtDur(pactDuration(p)) + "</div>";
+      html += '<article class="p-card"><div class="nm">' + esc(p.name) + "</div><p class=\"lore\">" + esc(p.blurb) + "</p><div class=\"meta\">" + esc(MAT_NAME[mat]) + " · " + fmtDur(L.pactDuration(state, p)) + "</div>";
       if (running) {
         html += '<div class="bar"><span data-pact="' + p.id + '"></span></div><div class="meta" data-pact-left="' + p.id + '"></div>';
       } else if (!open) {
         html += '<button type="button" class="btn" disabled>Forge a tier 4 blade first</button>';
       } else {
-        html += '<button type="button" class="btn btn-ember" data-act="pact" data-id="' + p.id + '"' + (state.pacts.length >= pactSlots() ? " disabled" : "") + ">Send a runner</button>";
+        html += '<button type="button" class="btn btn-ember" data-act="pact" data-id="' + p.id + '" aria-label="Send a runner: ' + esc(p.name) + '"' + off(state.pacts.length >= L.pactSlots(state)) + ">Send a runner</button>";
       }
       html += "</article>";
     });
@@ -1280,20 +1641,21 @@
     html += '<div class="group-label">Night market</div><p class="meta" id="market-eta"></p><div class="grid-cards">';
     MARKET.forEach(function (offer) {
       var stock = state.market.stock[offer.stockKey] || 0;
-      html += '<article class="p-card"><div class="nm">' + esc(offer.label) + '</div><div class="meta">Stock ' + stock + "</div><div class=\"costs\">" + costHtml(offer.cost) + '</div><button type="button" class="btn btn-gold" data-act="market" data-id="' + offer.id + '"' + (stock <= 0 || !canAfford(offer.cost) ? " disabled" : "") + ">Trade</button></article>";
+      html += '<article class="p-card"><div class="nm">' + esc(offer.label) + '</div><div class="meta">Stock ' + stock + "</div><div class=\"costs\">" + costHtml(offer.cost) + '</div><button type="button" class="btn btn-gold" data-act="market" data-id="' + offer.id + '" aria-label="Trade for ' + esc(offer.label) + '"' + off(stock <= 0 || !L.canAfford(state, offer.cost)) + ">Trade</button></article>";
     });
     html += "</div>";
-    html += "<p class=\"meta\">Runners: " + state.pacts.length + " / " + pactSlots() + ". The night bell's fifth ring opens the second.</p>";
+    html += "<p class=\"meta\">Runners: " + state.pacts.length + " / " + L.pactSlots(state) + ". The night bell's fifth ring opens the second.</p>";
     return html;
   }
+  function stat(k, v) { return "<div><span class=\"k\">" + esc(k) + "</span><b>" + esc(v) + "</b></div>"; }
   function renderLedger() {
-    var req = canPrestige();
+    var req = L.canPrestige(state);
     var html = '<div class="ledger-grid">';
     html += stat("Lifetime value", fmtInt(state.lifetimeValue));
     html += stat("Blades quenched", fmtInt(state.stats.forgedTotal));
     html += stat("Best tier ever", state.highestTier ? String(state.highestTier) : "—");
     html += stat("This firing", "Tier " + (state.run.bestTier || 0));
-    html += stat("Mastery", fmtInt(state.mastery) + " · +" + Math.round(Math.min(1, state.mastery * 0.0025) * 100) + "%");
+    html += stat("Mastery", fmtInt(state.mastery) + " · +" + Math.round(L.masteryBonus(state) * 100) + "%");
     html += stat("Prestige", roman(state.prestige) + " · +" + Math.round(state.prestige * 15) + "%");
     html += "</div>";
     html += "<h3 class=\"group-label\">Rack</h3>";
@@ -1302,9 +1664,9 @@
       html += '<div class="grid-cards">';
       state.rack.slice().reverse().slice(0, 8).forEach(function (item) {
         var w = weaponById[item.id];
-        var gain = masteryGain(item);
+        var gain = L.masteryGain(item);
         html += '<article class="p-card"><div class="nm">' + esc(w.name) + "</div><div class=\"meta\">" + Q_NAME[item.quality] + " · " + fmtInt(item.value) + "</div>";
-        html += '<button type="button" class="btn" data-act="retire" data-uid="' + item.uid + '">' + (gain ? "Retire +" + gain : "Set aside") + "</button></article>";
+        html += '<button type="button" class="btn" data-act="retire" data-uid="' + item.uid + '" aria-label="' + esc((gain ? "Retire " : "Set aside ") + Q_NAME[item.quality] + " " + w.name + (gain ? " for " + gain + " mastery" : "")) + '">' + (gain ? "Retire +" + gain : "Set aside") + "</button></article>";
       });
       html += "</div>";
       if (state.rack.length > 8) html += '<p class="meta">' + (state.rack.length - 8) + " more on the rack.</p>";
@@ -1316,47 +1678,75 @@
     html += '<p class="req' + ((state.run.legendRetires || 0) > 0 ? " ok" : "") + '">Or retire a legendary blade of tier 5 or higher this firing.</p>';
     if (state.prestige === 0) html += '<p class="meta">The first rekindle opens the outland armoury.</p>';
     else if (state.prestige === 1) html += '<p class="meta">The next rekindle reveals the claymore.</p>';
-    html += '<button type="button" class="btn btn-ember" data-act="prestige-open"' + (req ? "" : " disabled") + ">Rekindle the forge</button>";
+    html += '<button type="button" class="btn btn-ember" data-act="prestige-open"' + off(!req) + ">Rekindle the forge</button>";
     html += "<h3 class=\"group-label\">Journal</h3><ul class=\"journal\">";
     if (!state.journal.length) html += "<li>The ledger is blank.</li>";
     state.journal.forEach(function (entry) {
-      var d = new Date(entry.t);
-      var clock = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      var clock = "";
+      try { clock = new Date(entry.t).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); } catch (e) {}
       html += "<li><time>" + esc(clock) + "</time>" + esc(entry.text) + "</li>";
     });
     html += "</ul>";
     return html;
   }
-  function stat(k, v) { return "<div><span class=\"k\">" + esc(k) + "</span><b>" + esc(v) + "</b></div>"; }
+
+  /* Re-rendering replaces buttons, which would drop keyboard focus on the body.
+     Remember which control had focus and put it back on its replacement. */
+  function focusKey(el) {
+    if (!el || !el.getAttribute) return null;
+    var a = el.getAttribute("data-act");
+    if (!a) return null;
+    return { act: a, id: el.getAttribute("data-id"), uid: el.getAttribute("data-uid") };
+  }
+  function findByKey(host, key) {
+    if (!key) return null;
+    var sel = '[data-act="' + key.act + '"]';
+    if (key.id) sel += '[data-id="' + key.id + '"]';
+    if (key.uid) sel += '[data-uid="' + key.uid + '"]';
+    return host.querySelector(sel);
+  }
+  function rerender(host, html) {
+    var had = host.contains(document.activeElement) ? document.activeElement : null;
+    var key = focusKey(had);
+    var scroll = host.scrollTop;
+    host.innerHTML = html;
+    host.scrollTop = scroll;
+    if (!had) return;
+    var target = findByKey(host, key);
+    if (!target && key && key.act === "retire") target = host.querySelector('[data-act="retire"]') || host.querySelector('[data-act="retire-all"]');
+    if (target && !target.disabled) target.focus({ preventScroll: true });
+    else { host.setAttribute("tabindex", "-1"); host.focus({ preventScroll: true }); }
+  }
   function renderPanel() {
-    var el = document.getElementById("panel");
-    panelScroll = el.scrollTop;
-    var tabs = document.querySelectorAll(".tabs button");
-    tabs.forEach(function (btn) {
+    var el = $("panel");
+    document.querySelectorAll(".tabs [role=tab]").forEach(function (btn) {
       var on = btn.getAttribute("data-id") === state.tab;
       btn.setAttribute("aria-selected", on ? "true" : "false");
+      btn.setAttribute("tabindex", on ? "0" : "-1");
     });
+    el.setAttribute("aria-labelledby", "tab-" + state.tab);
     var html = "";
     if (state.tab === "workshop") html = renderWorkshop();
     else if (state.tab === "metals") html = renderMetals();
     else if (state.tab === "ledger") html = renderLedger();
     else html = renderArms();
-    el.innerHTML = html;
-    el.scrollTop = panelScroll;
+    rerender(el, html);
   }
   function renderDynamic() {
     renderJobs();
     renderPanel();
+    var gallery = $("gallery");
+    var had = gallery.contains(document.activeElement) ? focusKey(document.activeElement) : null;
+    var scroll = gallery.scrollLeft;
     renderGallery();
+    gallery.scrollLeft = scroll;
+    if (had) { var t = findByKey(gallery, had); if (t) t.focus({ preventScroll: true }); }
   }
   function paint() {
-    var scoreEl = document.getElementById("score");
-    if (scoreEl) scoreEl.textContent = fmtInt(computeScore());
-    var pEl = document.getElementById("prestige-label");
-    if (pEl) pEl.textContent = state.prestige ? roman(state.prestige) : "—";
-    var mEl = document.getElementById("mastery-label");
-    if (mEl) mEl.textContent = fmtInt(state.mastery);
-    var r = rates();
+    $("score").textContent = fmtInt(L.computeScore(state));
+    $("prestige-label").textContent = state.prestige ? roman(state.prestige) : "—";
+    $("mastery-label").textContent = fmtInt(state.mastery);
+    var r = L.rates(state);
     MATS.forEach(function (m) {
       var amt = document.querySelector('[data-amt="' + m.id + '"]');
       if (amt) amt.textContent = fmt(state.mats[m.id]);
@@ -1366,12 +1756,12 @@
       else if (m.rare) rate.textContent = "courier";
       else rate.textContent = fmtRate(r[m.id] || 0);
     });
-    var heat = Math.max(0, Math.min(100, state.heat));
-    document.getElementById("heatbar").style.width = heat + "%";
-    document.getElementById("heatnum").textContent = String(Math.round(heat));
+    var heat = Math.max(0, Math.min(100, state.heat || 0));
+    $("heatbar").style.width = heat + "%";
+    $("heatnum").textContent = String(Math.round(heat));
+    var speed = Math.max(0.25, L.forgeSpeed(state, false));
     state.jobs.forEach(function (job) {
       var bar = document.querySelector('[data-prog="' + job.uid + '"]');
-      var speed = Math.max(0.25, forgeSpeed());
       if (bar) bar.style.width = Math.max(0, Math.min(100, (job.progress / job.time) * 100)).toFixed(1) + "%";
       var left = document.querySelector('[data-left="' + job.uid + '"]');
       if (left) left.textContent = fmtDur(Math.max(0, (job.time - job.progress) / speed));
@@ -1382,73 +1772,91 @@
       var left = document.querySelector('[data-pact-left="' + p.id + '"]');
       if (left) left.textContent = fmtDur(p.remaining) + " remaining";
     });
-    var eta = document.getElementById("market-eta");
+    var eta = $("market-eta");
     if (eta) eta.textContent = "Restocks in " + fmtDur(Math.max(0, (state.market.nextAt - Date.now()) / 1000));
-    var folds = foldsAvailable();
-    var foldBtn = document.getElementById("fold");
-    var foldAll = document.getElementById("fold-all");
-    foldBtn.textContent = "Fold" + (folds ? " " + Math.min(folds, 99) : "");
-    foldBtn.disabled = folds < 1;
-    foldAll.disabled = folds < 2;
-    var note = document.getElementById("stage-note");
-    note.textContent = "Output ×" + globalMult().toFixed(2) + " · Quench ×" + offlineSpeed().toFixed(2) + " · Away " + Math.round(offlineEff() * 100) + "% for " + fmtDur(offlineCapSeconds()) + " · Anvils " + state.jobs.length + "/" + slots();
-    var suggest = document.getElementById("suggest");
-    var nxt = nextWeapon();
-    if (!nxt) suggest.textContent = "The codex is quiet";
-    else if (state.jobs.length >= slots()) suggest.textContent = "Anvil occupied · " + nxt.name;
-    else if (canAfford(nxt.cost) && needMet(nxt).ok) suggest.textContent = "Forge " + nxt.name;
-    else suggest.textContent = "Toward " + nxt.name + (needMet(nxt).ok ? " · need " + shortfall(nxt.cost) : " · " + needMet(nxt).why);
+    var folds = L.foldsAvailable(state);
+    var foldBtn = $("fold");
+    var foldAll = $("fold-all");
+    foldBtn.textContent = "Fold" + (folds ? " 1" : "");
+    setOff(foldBtn, folds < 1);
+    foldAll.textContent = folds >= 2 ? "Fold all " + fmtInt(folds) : "Fold all";
+    setOff(foldAll, folds < 2);
+    $("stage-note").textContent = "Output ×" + L.globalMult(state).toFixed(2) + " · Quench ×" + L.offlineSpeed(state).toFixed(2) + " · Away " + Math.round(L.offlineEff(state) * 100) + "% for " + fmtDur(L.offlineCapSeconds(state)) + " · Anvils " + state.jobs.length + "/" + L.slots(state);
+    var suggest = $("suggest");
+    var nxt = L.nextWeapon(state);
+    var text;
+    if (!nxt) text = "The codex is quiet";
+    else if (state.jobs.length >= L.slots(state)) text = "Anvil occupied · " + nxt.name;
+    else if (L.canAfford(state, nxt.cost) && L.needMet(state, nxt).ok) text = "Forge " + nxt.name;
+    else text = "Toward " + nxt.name + (L.needMet(state, nxt).ok ? " · need " + L.shortfall(state, nxt.cost) : " · " + L.needMet(state, nxt).why);
+    if (suggest.textContent !== text) suggest.textContent = text;
     suggest.dataset.wid = nxt ? nxt.id : "";
     document.querySelectorAll("[data-cost-mat]").forEach(function (el) {
-      var ok = have(el.getAttribute("data-cost-mat")) + 1e-6 >= Number(el.getAttribute("data-cost-need"));
+      var ok = L.have(state, el.getAttribute("data-cost-mat")) + 1e-6 >= Number(el.getAttribute("data-cost-need"));
       el.classList.toggle("short", !ok);
       el.classList.toggle("ok", ok);
     });
     document.querySelectorAll('#panel [data-act="forge"]').forEach(function (btn) {
       var w = weaponById[btn.getAttribute("data-id")];
-      btn.disabled = !w || state.jobs.length >= slots() || !canAfford(w.cost);
+      setOff(btn, !w || state.jobs.length >= L.slots(state) || !L.canAfford(state, w.cost));
     });
     document.querySelectorAll('#panel [data-act="buy"]').forEach(function (btn) {
       var u = upgradeById[btn.getAttribute("data-id")];
       if (!u) return;
       var lv = state.upgrades[u.id] || 0;
-      btn.disabled = lv >= u.max || !canAfford(u.cost(lv));
+      setOff(btn, lv >= u.max || !L.canAfford(state, u.cost(lv)));
     });
     document.querySelectorAll('#panel [data-act="market"]').forEach(function (btn) {
-      var offer = null;
-      MARKET.forEach(function (m) { if (m.id === btn.getAttribute("data-id")) offer = m; });
+      var offer = L.marketById[btn.getAttribute("data-id")];
       if (!offer) return;
-      btn.disabled = (state.market.stock[offer.stockKey] || 0) <= 0 || !canAfford(offer.cost);
+      setOff(btn, (state.market.stock[offer.stockKey] || 0) <= 0 || !L.canAfford(state, offer.cost));
     });
   }
   function updateMute() {
-    var b = document.getElementById("mute");
+    var b = $("mute");
     b.setAttribute("aria-pressed", muted ? "true" : "false");
-    b.setAttribute("aria-label", muted ? "Unmute sound" : "Mute sound");
+    b.setAttribute("aria-label", "Mute sound");
     b.innerHTML = muted
-      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>'
-      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 9a4 4 0 010 6"/><path d="M18.5 7a7 7 0 010 10"/></svg>';
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 10l4 4M20 10l-4 4"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M4 10h4l5-4v12l-5-4H4z"/><path d="M16 9a4 4 0 010 6"/><path d="M18.5 7a7 7 0 010 10"/></svg>';
   }
 
+  // ---------- dialogs ----------
+
   function openModal(html, dismiss) {
-    var m = document.getElementById("modal");
+    var m = $("modal");
+    if (!modalOpen()) modalReturnFocus = document.activeElement;
     m.dataset.dismiss = dismiss ? "1" : "0";
-    m.innerHTML = '<div class="sheet" role="dialog" aria-modal="true">' + html + "</div>";
+    m.innerHTML = '<div class="sheet" role="dialog" aria-modal="true" aria-labelledby="modal-title">' + html + "</div>";
     m.classList.remove("hidden");
+    var first = m.querySelector(".actions button");
+    if (first) first.focus();
   }
   function closeModal() {
-    document.getElementById("modal").classList.add("hidden");
+    var m = $("modal");
+    if (!modalOpen()) return;
+    // Any way out of the welcome sheet counts as having read it.
+    if (m.dataset.kind === "guide" && !state.welcomed) { state.welcomed = true; save(); }
+    m.classList.add("hidden");
+    m.innerHTML = "";
+    m.dataset.kind = "";
+    var back = modalReturnFocus;
+    modalReturnFocus = null;
+    if (back && document.contains(back) && typeof back.focus === "function") back.focus();
+    else $("strike").focus();
   }
-  function modalOpen() { return !document.getElementById("modal").classList.contains("hidden"); }
+  function modalOpen() { return !$("modal").classList.contains("hidden"); }
   function openGuide() {
     openModal(
-      "<h2>How the forge works</h2>" +
+      '<h2 id="modal-title">How the forge works</h2>' +
       "<h3>Materials</h3><p>The coals draw satetsu, sumi, urushi and whetstone on their own. Strike to raise heat and, while the anvil is empty, to sift a little extra sand. Fold 36 sand and 22 coal into one tamahagane bar. Spirit iron, moon silk and dragon scale are catalogue metals: pacts stand in until other Rokumon games can pay them in.</p>" +
       "<h3>Workshop</h3><p>Bellows, apprentices and the water wheel speed the work and keep it honest while you are away. Pin a blade once the wheel turns, and the forge will keep quenching that pattern.</p>" +
       "<h3>Blades</h3><p>Forge up the old steel line, from tanto to odachi. Quality is rolled at the quench. Retire fine work for permanent mastery. When this firing has a tier 6 blade, or you retire a legendary of tier 5 or higher, rekindle: the workshop resets, the codex and the rare metals stay, and the fire burns hotter.</p>" +
-      '<div class="actions"><button type="button" class="btn btn-ember" data-act="guide-dismiss">' + (state.welcomed ? "Close" : "Light the forge") + "</button></div>",
+      "<h3>Keys</h3><p>Space strikes when no button has focus. Tab moves between controls, Enter or Space presses them, and the arrow keys move between the four sections.</p>" +
+      '<div class="actions"><button type="button" class="btn btn-ember" data-act="close">' + (state.welcomed ? "Close" : "Light the forge") + "</button></div>",
       true
     );
+    $("modal").dataset.kind = "guide";
   }
   function openAway(report) {
     var rows = "";
@@ -1458,162 +1866,237 @@
     var blades = Object.keys(report.forged).map(function (id) {
       return esc(weaponById[id].name) + " ×" + report.forged[id];
     }).join(", ");
-    var html = "<h2>While you were away</h2>";
-    html += "<p>Gone " + fmtDur(report.away) + ". The coals held for " + fmtDur(report.counted) + " at " + Math.round(report.eff * 100) + "%.</p>";
+    var html = '<h2 id="modal-title">While you were away</h2>';
+    html += '<p data-away="summary">Gone ' + fmtDur(report.away) + ". The coals held for " + fmtDur(report.counted) + " at " + Math.round(report.eff * 100) + "%.</p>";
     if (report.capped) html += "<p>The fire slept after the cap. Apprentices keep a longer watch.</p>";
     html += rows || "<p>Little changed in the stock.</p>";
     if (blades) html += "<p>Quenched: " + blades + ".</p>";
     if (report.folded) html += "<p>Folded " + fmtInt(report.folded) + " tamahagane.</p>";
     html += '<div class="actions"><button type="button" class="btn btn-ember" data-act="close">Return to the anvil</button></div>';
     openModal(html, true);
+    $("modal").dataset.kind = "away";
   }
   function openPrestige() {
     var extra = state.prestige === 0 ? " The outland armoury opens." : (state.prestige === 1 ? " Claymore patterns unlock." : "");
     openModal(
-      "<h2>Rekindle the forge?</h2><p>Common stock, tamahagane, workshop levels, running pacts and the rack are cleared. Mastery on the rack is banked first. Catalogue metals, codex unlocks and lifetime score remain. The next firing gains another 15% output." + extra + "</p>" +
-      '<div class="actions"><button type="button" class="btn btn-ember" data-act="confirm-prestige">Bank the coals</button><button type="button" class="btn" data-act="close">Not yet</button></div>',
+      '<h2 id="modal-title">Rekindle the forge?</h2><p>Common stock, tamahagane, workshop levels, running pacts and the rack are cleared. Mastery on the rack is banked first. Catalogue metals, codex unlocks and lifetime score remain. The next firing gains another 15% output.' + extra + "</p>" +
+      '<div class="actions"><button type="button" class="btn" data-act="close">Not yet</button><button type="button" class="btn btn-ember" data-act="confirm-prestige">Bank the coals</button></div>',
       true
     );
+    $("modal").dataset.kind = "prestige";
+  }
+
+  // ---------- input ----------
+
+  function doStrike() {
+    var now = performance.now();
+    if (now - lastStrike < 150) return;
+    lastStrike = now;
+    ac();
+    var ctx = ctxNow(false);
+    L.strike(state, ctx);
+    handle(ctx);
+    swing();
+    sparks();
+    playStrike();
+  }
+  function selectTab(id, focus) {
+    if (L.TABS.indexOf(id) < 0) return;
+    state.tab = id;
+    dirty = true;
+    if (focus) { var t = $("tab-" + id); if (t) t.focus(); }
   }
 
   document.body.addEventListener("click", function (e) {
     var t = e.target.closest("[data-act]");
     if (!t || t.disabled) return;
-    var act = t.getAttribute("data-act");
+    var a = t.getAttribute("data-act");
     var id = t.getAttribute("data-id");
-    if (act === "strike") strike();
-    else if (act === "fold") fold(1);
-    else if (act === "fold-all") fold(Math.min(25, foldsAvailable()));
-    else if (act === "suggest") {
-      var wid = t.dataset.wid;
-      var w = weaponById[wid];
-      if (w && needMet(w).ok && canAfford(w.cost) && state.jobs.length < slots()) startForge(w.id);
-      else { state.selected = wid || state.selected; state.tab = "arms"; dirty = true; }
-    } else if (act === "tab") {
-      state.tab = id;
-      dirty = true;
+    if (a === "strike") doStrike();
+    else if (a === "fold") act(function (c) { return L.fold(state, 1, c); });
+    else if (a === "fold-all") act(function (c) { return L.fold(state, L.foldsAvailable(state), c); });
+    else if (a === "suggest") {
+      var w = weaponById[t.dataset.wid];
+      if (w && L.needMet(state, w).ok && L.canAfford(state, w.cost) && state.jobs.length < L.slots(state)) {
+        act(function (c) { return L.startForge(state, w.id, c, false); });
+      } else if (w) { state.selected = w.id; selectTab("arms", false); }
+    } else if (a === "tab") {
+      selectTab(id, false);
       if (window.innerWidth < 861) {
-        var reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
         requestAnimationFrame(function () {
           var panel = document.querySelector(".panel");
-          if (panel) panel.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+          if (panel) panel.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
         });
       }
     }
-    else if (act === "select") { state.selected = id; state.tab = "arms"; dirty = true; }
-    else if (act === "forge") startForge(id);
-    else if (act === "pin") {
-      state.pinned = state.pinned === id ? null : id;
-      dirty = true;
-      save();
-    } else if (act === "buy") buy(id);
-    else if (act === "pact") startPact(id);
-    else if (act === "market") buyMarket(id);
-    else if (act === "retire") retireUid(Number(t.getAttribute("data-uid")), false);
-    else if (act === "retire-all") retireAll(false);
-    else if (act === "prestige-open") openPrestige();
-    else if (act === "confirm-prestige") doPrestige();
-    else if (act === "howto") openGuide();
-    else if (act === "guide-dismiss") {
-      if (!state.welcomed) { state.welcomed = true; save(); }
-      closeModal();
-    } else if (act === "close") closeModal();
-    else if (act === "mute") {
+    else if (a === "select") { if (weaponById[id]) { state.selected = id; state.tab = "arms"; dirty = true; } }
+    else if (a === "forge") act(function (c) { return L.startForge(state, id, c, false); });
+    else if (a === "pin") act(function () { return L.togglePin(state, id); });
+    else if (a === "buy") act(function (c) { return L.buyUpgrade(state, id, c); });
+    else if (a === "pact") act(function (c) { return L.startPact(state, id, c); });
+    else if (a === "market") act(function (c) { return L.buyMarket(state, id, c); });
+    else if (a === "retire") act(function (c) { return L.retire(state, Number(t.getAttribute("data-uid")), c, false); });
+    else if (a === "retire-all") act(function (c) { return L.retireAll(state, c, false); });
+    else if (a === "prestige-open") { if (L.canPrestige(state)) openPrestige(); else tell("This firing has not earned a rekindle"); }
+    else if (a === "confirm-prestige") {
+      var res = act(function (c) { return L.prestige(state, c); });
+      if (res && res.ok) { modalReturnFocus = null; closeModal(); }
+    }
+    else if (a === "howto") openGuide();
+    else if (a === "close") closeModal();
+    else if (a === "mute") {
       muted = !muted;
       state.mute = muted;
+      if (muted && audioCtx && audioCtx.state === "running") { try { audioCtx.suspend(); } catch (err) {} }
       updateMute();
+      announce(muted ? "Sound off" : "Sound on");
       save();
     }
   });
   document.body.addEventListener("change", function (e) {
     if (e.target && e.target.getAttribute("data-act") === "auto") {
-      state.auto = !!e.target.checked && state.upgrades.water >= 1;
-      if (state.auto) tryFill();
-      dirty = true;
-      save();
+      var on = !!e.target.checked;
+      act(function (c) { return L.setAuto(state, on, c); });
+      announce(state.auto ? "Tending the pinned blade" : "Tending stopped");
     }
   });
-  document.getElementById("modal").addEventListener("click", function (e) {
-    if (e.target.id === "modal" && document.getElementById("modal").dataset.dismiss === "1") closeModal();
+  $("modal").addEventListener("click", function (e) {
+    if (e.target.id === "modal" && $("modal").dataset.dismiss === "1") closeModal();
+  });
+  document.querySelector(".tabs").addEventListener("keydown", function (e) {
+    var order = L.TABS;
+    var i = order.indexOf(state.tab);
+    var next = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") next = order[(i + 1) % order.length];
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") next = order[(i + order.length - 1) % order.length];
+    else if (e.key === "Home") next = order[0];
+    else if (e.key === "End") next = order[order.length - 1];
+    if (!next) return;
+    e.preventDefault();
+    selectTab(next, true);
+    renderPanel();
+    dirty = false;
   });
   window.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && modalOpen() && document.getElementById("modal").dataset.dismiss === "1") closeModal();
-    if (e.code === "Space" && e.target === document.body && !modalOpen()) {
+    if (modalOpen()) {
+      if (e.key === "Escape" && $("modal").dataset.dismiss === "1") { e.preventDefault(); closeModal(); }
+      else if (e.key === "Tab") {
+        // Keep focus inside the open dialog.
+        var items = Array.prototype.slice.call($("modal").querySelectorAll("button:not(:disabled)"));
+        if (!items.length) return;
+        var first = items[0], last = items[items.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!$("modal").contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+      }
+      return;
+    }
+    var tgt = e.target;
+    var onControl = tgt && tgt !== document.body && tgt.closest && tgt.closest("button, input, select, textarea, a[href], [tabindex]");
+    if ((e.code === "Space" || e.key === " ") && !onControl) {
       e.preventDefault();
-      strike();
+      doStrike();
     }
   });
   document.addEventListener("pointerdown", function () { ac(); }, { passive: true });
 
+  // ---------- courier grants (inbound seam for catalogue metals) ----------
+
+  function grant(material, amount, source) {
+    var ctx = ctxNow(false);
+    var res = L.grantMaterial(state, material, amount, source, ctx, grantTimes);
+    handle(ctx);
+    if (res.ok) save();
+    return res;
+  }
   window.addEventListener("message", function (ev) {
     var data = ev.data;
     if (!data || typeof data !== "object") return;
     if (data.type !== "rokumon:grant" && data.type !== "hub:material") return;
     if (ev.source !== window.parent || window.parent === window) return;
     if (ev.origin !== window.location.origin) return;
-    grantMaterial(data.material, data.amount, data.source);
+    grant(data.material, data.amount, data.source);
   });
   window.addEventListener("rokumon:grant", function (ev) {
     var d = ev.detail || {};
-    grantMaterial(d.material, d.amount, d.source);
+    grant(d.material, d.amount, d.source);
   });
 
   window.RokumonForge = {
-    version: "1.0.0",
-    grantMaterial: grantMaterial,
-    getScore: computeScore,
+    version: "1.1.0",
+    grantMaterial: grant,
+    getScore: function () { return L.computeScore(state); },
     getMaterials: function () {
       var copy = {};
       MATS.forEach(function (m) { copy[m.id] = state.mats[m.id]; });
       return copy;
-    }
+    },
+    getSnapshot: function () { return JSON.parse(L.serialize(state)); }
   };
 
-  load();
-  muted = !!state.mute;
-  var bootGap = (Date.now() - (state.lastTick || Date.now())) / 1000;
-  var away = null;
-  if (state.welcomed && bootGap >= 45) away = runOffline(bootGap);
-  else if (bootGap > 1 && bootGap < 45) simulate(Math.min(bootGap, 30), false);
-  state.lastTick = Date.now();
-  refreshMarket();
+  // ---------- boot and the frame loop ----------
+
+  function comeBack(gapSeconds) {
+    var ctx = ctxNow(false);
+    var report = L.runOffline(state, gapSeconds, ctx);
+    dirty = true;
+    if (report.blades || Object.keys(report.gained).length) {
+      hubEvent("offline-return", { seconds: Math.floor(report.counted), forged: report.blades });
+      reportScore(false);
+      if (!modalOpen()) openAway(report);
+    }
+    return report;
+  }
+
+  var boot = load();
+  var bootNow = Date.now();
+  var bootGap = L.wallGap(state, bootNow);
+  if (bootGap >= L.OFFLINE_MIN_GAP) comeBack(bootGap);
+  else if (bootGap > 0) { var bctx = ctxNow(false); L.simulate(state, bootGap, bctx); }
+  L.markTime(state, bootNow);
+  L.refreshMarket(state, bootNow, ctxNow(false));
   renderResources();
   renderDynamic();
   dirty = false;
   paint();
   updateMute();
-  if (away && (Object.keys(away.gained).length || Object.keys(away.forged).length || away.folded)) openAway(away);
-  else if (!state.welcomed) openGuide();
-  hubReady();
+  if (!state.welcomed && !modalOpen()) openGuide();
+  if (boot.status === "reset") tell("The old save could not be read. A new forge is lit.");
+  save();
+  if (window.Hub && typeof window.Hub.ready === "function") { try { window.Hub.ready(); } catch (e) {} }
+  reportScore(true);
 
+  var lastPerf = performance.now();
   var lastSave = 0;
-  function loop() {
+  function frame() {
+    var perf = performance.now();
     var now = Date.now();
-    var gap = (now - state.lastTick) / 1000;
-    if (gap >= 45 && state.welcomed) {
-      var report = runOffline(gap);
-      state.lastTick = Date.now();
-      if (!modalOpen() && (Object.keys(report.gained).length || Object.keys(report.forged).length || report.folded)) openAway(report);
-      dirty = true;
-    } else if (gap > 0) {
-      simulate(Math.min(gap, 30), false);
-      state.lastTick = Date.now();
+    var dt = Math.max(0, (perf - lastPerf) / 1000);
+    lastPerf = perf;
+    if (dt >= L.OFFLINE_MIN_GAP) {
+      // The tab was hidden or the device slept: rAF stopped, so treat it as an absence.
+      comeBack(Math.max(dt, L.wallGap(state, now)));
+    } else if (dt > 0) {
+      var ctx = ctxNow(false);
+      L.simulate(state, dt, ctx);
+      handle(ctx);
     }
+    L.markTime(state, now);
     if (now - lastSave > 5000) {
       lastSave = now;
-      refreshMarket();
+      if (L.refreshMarket(state, now, ctxNow(false))) dirty = true;
       reportScore(false);
       save();
     }
     if (dirty) { renderDynamic(); dirty = false; }
     paint();
-    requestAnimationFrame(loop);
+    requestAnimationFrame(frame);
   }
-  requestAnimationFrame(loop);
+  requestAnimationFrame(frame);
   document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "hidden") save();
+    if (document.visibilityState === "hidden") { L.markTime(state, Date.now()); save(); }
   });
-  window.addEventListener("pagehide", save);
+  window.addEventListener("pagehide", function () { L.markTime(state, Date.now()); save(); });
 })();
 </script>
 </body>
